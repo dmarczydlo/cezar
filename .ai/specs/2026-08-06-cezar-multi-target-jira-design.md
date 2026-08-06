@@ -23,6 +23,7 @@ What is missing:
 - **Workspace-wide Jira board** (one config for the whole cezar home), via **REST API** (not MCP).
 - Draft PRs include the Jira issue key in **title/body** (no Jira comments in v1).
 - Keep a clean path to pull fixes from `open-mercato/cezar` (`upstream`).
+- Add **Cursor CLI** (`agent`) as a fourth selectable runner beside Claude / Codex / OpenCode.
 
 ## Non-goals (v1)
 
@@ -85,14 +86,15 @@ What is missing:
 | **Multi-target planner** | Spec + selected projects → per-project prompts; fallback if planning fails. |
 | **Ext New-task / Board / Group UI** | Separate routes under `/ext/myne/*` — stock New task unchanged. |
 | **PR title via run title** | Stamp Jira key onto run `title` through existing store APIs so stock `createDraftPr` picks it up — no forge edits. |
+| **Cursor runner (`ext/myne/cursor`)** | `AgentRunner` over `agent -p --force`; thin core registry hooks only (`RunnerId`, `createRunner`, provider probe, picker). |
 
 GitHub remains the per-project **forge** (PRs, checks). Jira is an **ext board** only in v1 — not a full `ForgeDriver` replacement.
 
 ### Isolation / upgrade rules
 
-- **Allowed upstream touch points:** one `registerMyneExt(...)` call in `server.ts`; a few route mounts in `routes.tsx`.
-- **Do not modify** for these features: `runs/store.ts`, `workflows/run.ts`, `server/forge/github.ts`, stock `new-task.tsx`.
-- Periodic upgrade: `git fetch upstream && merge upstream/main` — expect conflicts only at those hooks.
+- **Allowed upstream touch points:** one `registerMyneExt(...)` call in `server.ts`; a few route mounts in `routes.tsx`; for Cursor, thin `RunnerId` / provider / `createRunner` / picker catalog hooks.
+- **Do not modify** for multi-target/Jira: `runs/store.ts`, `workflows/run.ts`, `server/forge/github.ts`, stock `new-task.tsx` (ext UI instead).
+- Periodic upgrade: `git fetch upstream && merge upstream/main` — expect conflicts mainly at those hooks.
 
 ## Data model
 
@@ -199,3 +201,4 @@ Suggested build order:
 | PR ↔ Jira | Issue key via run title (stock draft PR); no forge edits |
 | Approach | **Isolated `ext/myne` layer** so upstream upgrades stay easy |
 | Core schema | No `groupKind` / `sourceRef` on `RunRecord` — ext state owns them |
+| Cursor CLI | Fourth runner via `agent` binary; impl in `ext/myne/cursor`, thin core registry hooks |
