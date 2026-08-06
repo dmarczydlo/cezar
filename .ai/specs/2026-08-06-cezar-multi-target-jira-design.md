@@ -3,7 +3,8 @@
 > Status: approved design (brainstorming)  
 > Date: 2026-08-06  
 > Upstream: [open-mercato/cezar](https://github.com/open-mercato/cezar)  
-> Approach: thin fork — reuse `groupId` fan-out + additive workspace board
+> Approach: isolated extension layer (`ext/myne`) — reuse stock `groupId` fan-out + ext-owned Jira board  
+> Amendment: keep all Myne features out of upstream modules so `upstream/main` upgrades stay mergeable
 
 ## Problem
 
@@ -78,17 +79,24 @@ What is missing:
 
 | Piece | Responsibility |
 |-------|----------------|
-| **Workspace board provider** | List/pick Jira issues via REST for the cockpit. Configured once in `~/.cezar`. |
-| **Cross-project starter** | Like `startVariants`, but targets are `{ projectId, prompt }[]` with `groupKind: "multi-target"`. |
+| **`ext/myne` server module** | All Myne APIs, planner, starter, Jira client, ext state — isolated from upstream packages. |
+| **Ext board provider** | List/pick Jira issues via REST. Config in `~/.cezar/ext-myne/state.json`. |
+| **Cross-project starter** | Calls stock `RunManager.startRun` with shared `groupId` and `variant = projectId`; records members in ext state. |
 | **Multi-target planner** | Spec + selected projects → per-project prompts; fallback if planning fails. |
-| **New-task UI** | Source picker, project multi-select, optional om-spec, Plan → Start. |
-| **PR title helper** | Ensures Jira issue key in draft PR title/body. |
+| **Ext New-task / Board / Group UI** | Separate routes under `/ext/myne/*` — stock New task unchanged. |
+| **PR title via run title** | Stamp Jira key onto run `title` through existing store APIs so stock `createDraftPr` picks it up — no forge edits. |
 
-GitHub remains the per-project **forge** (PRs, checks). Jira is a **workspace board** only in v1 — not a full `ForgeDriver` replacement.
+GitHub remains the per-project **forge** (PRs, checks). Jira is an **ext board** only in v1 — not a full `ForgeDriver` replacement.
+
+### Isolation / upgrade rules
+
+- **Allowed upstream touch points:** one `registerMyneExt(...)` call in `server.ts`; a few route mounts in `routes.tsx`.
+- **Do not modify** for these features: `runs/store.ts`, `workflows/run.ts`, `server/forge/github.ts`, stock `new-task.tsx`.
+- Periodic upgrade: `git fetch upstream && merge upstream/main` — expect conflicts only at those hooks.
 
 ## Data model
 
-### Workspace config (additive in `~/.cezar/config.json`)
+### Ext state (`~/.cezar/ext-myne/state.json`)
 
 ```json
 {
@@ -98,18 +106,27 @@ GitHub remains the per-project **forge** (PRs, checks). Jira is a **workspace bo
     "email": "user@example.com",
     "apiTokenEnv": "JIRA_API_TOKEN",
     "jql": "assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC"
+  },
+  "groups": {
+    "<groupId>": {
+      "kind": "multi-target",
+      "createdAt": "ISO-8601",
+      "sourceRef": { "kind": "jira", "key": "PLAT-1", "url": "…" },
+      "members": [
+        { "projectId": "platform-core-service", "runId": "…" }
+      ]
+    }
   }
 }
 ```
 
-- Omit `board` or use non-jira → no Jira board UI (GitHub per project unchanged).
+- Omit `board` → no Jira board UI (GitHub per project unchanged).
 - API token **only** via environment variable named by `apiTokenEnv`; never stored in repo `.ai/cezar/` or committed config.
 
-### Run record (additive)
+### Run record (stock only)
 
-- Reuse `groupId` (and optionally `variant` unused / reserved for multi-target labels).
-- `groupKind: "variants" | "multi-target"`.
-- `sourceRef?: { kind: "jira" | "github" | "file" | "compose"; key?: string; url?: string }`.
+- Reuse existing `groupId` + `variant` (`variant` = target `projectId` for multi-target).
+- **No** new `groupKind` / `sourceRef` fields on `RunRecord` — those live in ext state.
 - Each child run remains single-project (`projectId` / `repoRoot`).
 
 ## Jira integration
@@ -134,8 +151,8 @@ GitHub remains the per-project **forge** (PRs, checks). Jira is a **workspace bo
 
 1. Fork `open-mercato/cezar` on GitHub.
 2. Remotes: `origin` = fork, `upstream` = `open-mercato/cezar`.
-3. Implement behind additive seams (board config, multi-target starter, New-task UI) to minimize merge conflict with upstream `main`.
-4. Periodically: `git fetch upstream` && merge or rebase onto `upstream/main`.
+3. Keep features in `ext/myne` + `routes/ext-myne` with only register-hook touches upstream.
+4. Periodically: `git fetch upstream` && merge or rebase onto `upstream/main` — expect conflicts mainly at the hook lines.
 
 Do not reshape protected GitHub forge list payloads (`BACKWARD_COMPATIBILITY` surfaces).
 
@@ -143,44 +160,42 @@ Do not reshape protected GitHub forge list payloads (`BACKWARD_COMPATIBILITY` su
 
 **Automated**
 
+- Ext state round-trip + corrupt/missing degrade.
 - Planner unit tests: multi-service sample → N scoped prompts; fallback path.
-- Starter: N runs, shared `groupId`, `groupKind: "multi-target"`, correct `projectId`; single-target unchanged.
+- Starter: N runs, shared `groupId`, `variant = projectId`, members in ext state; single-target stock path unchanged.
 - Jira board: mocked REST list/map; missing token → unavailable.
-- PR helper: Jira `sourceRef` → title contains `PROJ-123`.
+- PR helper: Jira `sourceRef.key` → run title includes `PROJ-123` (stock draft PR uses title).
 
 **Manual (Myne VPS)**
 
-- Paste spec → select `platform-core-service` + `platform-web-admin` → Plan → Start → two worktrees/PRs.
+- Ext New task → paste spec → select `platform-core-service` + `platform-web-admin` → Plan → Start → two worktrees/PRs.
 - Jira-sourced task → draft PR titles carry the key.
-- Upstream merge remains clean on untouched core paths.
+- Upstream merge dry-run conflicts only at register hooks.
 
 ## Success criteria
 
-- One cockpit action yields linked parallel runs after a plan step (no manual BE/FE double-start for this flow).
-- Workspace Jira board can seed New task without MCP.
+- One cockpit action on **ext** New task yields linked parallel runs after a plan step.
+- Ext Jira board can seed New task without MCP.
 - Draft PRs carry the Jira issue key when applicable.
-- Upstream open-mercato changes remain pullable with manageable conflicts.
+- Upstream open-mercato changes remain pullable with conflicts limited to thin hooks.
 
 ## Implementation notes (for later planning)
 
 Suggested build order:
 
-1. Fork + upstream remote wiring (no feature code).
-2. Additive run fields + multi-target starter (API + tests).
-3. Multi-target planner + New-task multi-select UI.
-4. Workspace Jira board (config + REST + UI picker).
-5. PR title/body key injection.
-6. Optional om-spec refine step wiring.
-7. VPS manual validation against Myne services.
+1. Fork + upstream remote wiring (done).
+2. Ext scaffold + state + register hook.
+3. Planner → start/group API → ext UI → Jira → title stamping → om-spec hint → VPS validation.
 
 ## Resolved decisions
 
 | Topic | Decision |
 |-------|----------|
-| Cross-service UX | One New task → multi-select services → plan → parallel linked runs |
-| Coordination | Plan first, then parallel (not fully blind parallel, not BE-then-FE ordered) |
+| Cross-service UX | One ext New task → multi-select services → plan → parallel linked runs |
+| Coordination | Plan first, then parallel |
 | Spec sources | Compose/file, Jira, GitHub; usually compose/file or Jira; optional `om-spec-writing` |
-| Jira access | REST API from cezar server |
-| Board scope | One Jira board for the whole workspace |
-| PR ↔ Jira | Issue key in PR title/body only |
-| Approach | Thin fork reusing `groupId` / variants fan-out pattern |
+| Jira access | REST API from cezar server (ext module) |
+| Board scope | One Jira board in ext workspace state |
+| PR ↔ Jira | Issue key via run title (stock draft PR); no forge edits |
+| Approach | **Isolated `ext/myne` layer** so upstream upgrades stay easy |
+| Core schema | No `groupKind` / `sourceRef` on `RunRecord` — ext state owns them |
