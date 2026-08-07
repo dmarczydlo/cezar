@@ -53,7 +53,7 @@ const configSchema = z.object({
    * step (workflow). The GUI only offers runners actually installed; this is
    * the preselected default. Also the runner the chain planner uses.
    */
-  defaultRunner: z.enum(['claude', 'codex', 'opencode']).default('claude'),
+  defaultRunner: z.enum(['claude', 'codex', 'opencode', 'cursor']).default('claude'),
   /** Model for the chain planner (spec 008) — cheap but reliable at JSON. */
   plannerModel: z.string().min(1).default('sonnet'),
   /** Model for the task namer (spec 2026-07-17-task-auto-naming) — the cheapest

@@ -285,7 +285,7 @@ export function depCheckStep(opts: DepStepOpts = {}): InstallStep {
       if (ctx.dryRun) return false;
       const checks = await detect();
       // Satisfied when at least one agent CLI is present and authed.
-      return checks.some((c) => ['claude', 'codex', 'opencode'].includes(c.name) && c.available);
+      return checks.some((c) => ['claude', 'codex', 'opencode', 'cursor'].includes(c.name) && c.available);
     },
     async run(ctx) {
       const checks = await detect();

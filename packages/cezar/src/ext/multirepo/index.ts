@@ -57,7 +57,7 @@ const startBodySchema = z.object({
     .max(8)
     .optional(),
   autonomous: z.boolean().optional(),
-  runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+  runner: z.enum(['claude', 'codex', 'opencode', 'cursor']).optional(),
   model: z.string().max(200).optional(),
   sourceRef: sourceRefSchema,
 });

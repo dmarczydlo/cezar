@@ -532,7 +532,7 @@ const startRunSchema = z
     task: z.string().min(1).max(100_000, 'must be at most 100000 characters'),
     model: z.string().optional(),
     // Agent backend for this task (falls back to config `defaultRunner`).
-    runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    runner: z.enum(['claude', 'codex', 'opencode', 'cursor']).optional(),
     // Agent account for this task (spec 2026-07-29-agent-profiles). Falls back to the project's
     // own selection, then the discovered default. Bounded like a profile id in the workspace
     // schema, so a value this route accepts can never be degraded away by the next load.
@@ -856,7 +856,7 @@ function foldedLength(task: string, stack: Array<{ text: string }>): number {
 const continueSchema = z.object({
   text: z.string().max(100_000, 'must be at most 100000 characters').optional(),
   images: z.array(imageInputSchema).max(4).optional(),
-  runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+  runner: z.enum(['claude', 'codex', 'opencode', 'cursor']).optional(),
   model: z.string().max(200).optional(),
 });
 
@@ -869,7 +869,7 @@ const continueSchema = z.object({
 // absent so it never touches `task`.
 const startTodoSchema = z
   .object({
-    runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    runner: z.enum(['claude', 'codex', 'opencode', 'cursor']).optional(),
     model: z.string().max(200).optional(),
     prompt: z
       .string()
@@ -1775,7 +1775,7 @@ export function createApp(deps: ServerDeps) {
       },
     )
 
-    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: 'provider must be claude, codex, or opencode' }), async (c) => {
+    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: 'provider must be claude, codex, opencode, or cursor' }), async (c) => {
       const body = { data: c.req.valid('json') };
 
       const provider = body.data.provider as ProviderId;
@@ -4981,7 +4981,7 @@ export function createApp(deps: ServerDeps) {
   const modelPresetSchema = z.string().trim().max(200).nullable().optional();
   const setConfigSchema = z.object({
     baseBranch: z.string().trim().min(1).max(200).nullable().optional(),
-    defaultRunner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    defaultRunner: z.enum(['claude', 'codex', 'opencode', 'cursor']).optional(),
     systemPrompt: z.string().trim().max(20_000, 'must be at most 20000 characters').nullable().optional(),
     defaultModels: z
       .object({

@@ -38,6 +38,7 @@ export const PROFILE_ENV_VAR: Record<ProviderId, string | null> = {
   claude: 'CLAUDE_CONFIG_DIR',
   codex: 'CODEX_HOME',
   opencode: null,
+  cursor: null,
 };
 
 /** Providers that can carry more than one account — what the UI offers "Add account" for. */
@@ -88,4 +89,5 @@ const PROFILE_DIR_MARKERS: Record<ProviderId, readonly string[]> = {
   claude: ['.claude.json', 'settings.json', 'projects', 'sessions'],
   codex: ['auth.json', 'config.toml'],
   opencode: [],
+  cursor: [],
 };
