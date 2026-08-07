@@ -34,7 +34,7 @@ describe('provider action gate', () => {
       ],
     };
 
-    expect(providersRequiredByWorkflow(workflow, 'claude')).toEqual(['claude', 'codex', 'opencode', 'cursor']);
+    expect(providersRequiredByWorkflow(workflow, 'claude')).toEqual(['claude', 'codex', 'opencode']);
   });
 
   it('reports disabled before missing credentials', () => {
