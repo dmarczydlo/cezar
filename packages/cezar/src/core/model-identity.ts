@@ -89,9 +89,10 @@ export const BACKEND_MODEL_MAP: Readonly<Record<AgentBackend, BackendModelMap>> 
   // opencode selects across providers, so a bare model is ambiguous: reject it
   // loudly rather than let the server pick a default the user never asked for.
   opencode: {},
-  // Cursor Agent CLI accepts bare model ids from `agent models` / Settings;
-  // no defaultProvider — discovery fills the picker.
-  cursor: {},
+  // Cursor Agent CLI takes bare catalog ids on `--model` (`kimi-k3-low`,
+  // `composer-2.5`). Discovery fills the picker; the default provider is only
+  // the canonical-identity namespace (stripped again in toBackendModel).
+  cursor: { defaultProvider: 'cursor' },
 };
 
 const SLASH = '/';
@@ -137,10 +138,14 @@ export function resolveModelIdentity(
   options: { configuredProvider?: string } = {},
 ): ModelIdentity | undefined {
   if (!raw || !raw.trim()) return undefined;
+  const trimmed = raw.trim();
+  // Cursor (and some UIs) surface the literal label "auto" from native settings
+  // / cli-config; treat it like empty so the CLI picks its default.
+  if (trimmed.toLowerCase() === 'auto') return undefined;
   const map = BACKEND_MODEL_MAP[backend] ?? {};
   const configuredProvider = options.configuredProvider?.trim().toLowerCase() || undefined;
   const effectiveProvider = configuredProvider ?? map.defaultProvider;
-  const explicit = parseModelIdentity(raw);
+  const explicit = parseModelIdentity(trimmed);
   if (explicit) {
     // Most single-provider backends need their bare wire form, but Claude Code
     // also accepts explicit gateway/custom provider ids. Keep rejecting foreign
@@ -158,7 +163,7 @@ export function resolveModelIdentity(
     }
     return explicit;
   }
-  const model = raw.trim();
+  const model = trimmed;
   const provider = map.providerByModel?.[model] ?? effectiveProvider;
   if (!provider) {
     throw new ModelIdentityError(
