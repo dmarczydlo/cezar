@@ -57,6 +57,13 @@ describe('resolveModelIdentity — empty / auto', () => {
       expect(resolveModelIdentity(backend, '   ')).toBeUndefined();
     }
   });
+
+  it('is undefined for the literal label "auto" on every backend', () => {
+    for (const backend of Object.keys(BACKEND_MODEL_MAP) as AgentBackend[]) {
+      expect(resolveModelIdentity(backend, 'auto')).toBeUndefined();
+      expect(resolveModelIdentity(backend, 'Auto')).toBeUndefined();
+    }
+  });
 });
 
 describe('resolveModelIdentity — bare ids per backend', () => {
@@ -89,6 +96,20 @@ describe('resolveModelIdentity — bare ids per backend', () => {
       expect((err as Error).message).toContain('ambiguous');
       expect((err as Error).message).toContain('provider/model');
     }
+  });
+
+  it('cursor bare catalog ids resolve to the cursor provider namespace', () => {
+    expect(resolveModelIdentity('cursor', 'kimi-k3-low')).toEqual({
+      provider: 'cursor',
+      model: 'kimi-k3-low',
+    });
+    expect(resolveModelIdentity('cursor', 'composer-2.5')).toEqual({
+      provider: 'cursor',
+      model: 'composer-2.5',
+    });
+    expect(toBackendModel('cursor', { provider: 'cursor', model: 'kimi-k3-low' })).toBe(
+      'kimi-k3-low',
+    );
   });
 
   it('an explicit provider/model resolves for a multi-provider backend (opencode), any provider', () => {
@@ -177,6 +198,7 @@ describe('round-trip: composer preset → resolve → render back to the wire st
       backend: 'opencode',
       presets: ['anthropic/claude-opus-4-8', 'anthropic/claude-sonnet-5', 'openai/gpt-5.1'],
     },
+    { backend: 'cursor', presets: ['kimi-k3-low', 'composer-2.5'] },
   ];
 
   for (const { backend, presets } of cases) {
