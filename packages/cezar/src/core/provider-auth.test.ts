@@ -21,7 +21,15 @@ const connectedResults: Record<string, ProviderCommandResult> = {
     stderr: '',
     exitCode: 0,
   },
-  cursor: { stdout: '2026.01.0', stderr: '', exitCode: 0 },
+  cursor: {
+    stdout: JSON.stringify({
+      status: 'authenticated',
+      isAuthenticated: true,
+      userInfo: { email: 'me@example.com' },
+    }),
+    stderr: '',
+    exitCode: 0,
+  },
 };
 
 const originalEnv = {
@@ -485,7 +493,7 @@ describe('ProviderAuthService', () => {
       { executable: 'claude', args: ['auth', 'status', '--json'], timeoutMs: 10_000 },
       { executable: 'codex', args: ['login', 'status'], timeoutMs: 10_000 },
       { executable: 'opencode', args: ['auth', 'list'], timeoutMs: 10_000 },
-      { executable: 'agent', args: ['--version'], timeoutMs: 10_000 },
+      { executable: 'agent', args: ['status', '--format', 'json'], timeoutMs: 10_000 },
     ]);
     release();
     await expect(pending).resolves.toBeDefined();

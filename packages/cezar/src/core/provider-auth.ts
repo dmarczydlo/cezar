@@ -240,7 +240,7 @@ const DESCRIPTORS: readonly ProviderDescriptor[] = [
   {
     id: 'cursor',
     executable: () => process.env.CEZ_CURSOR_AGENT_BIN ?? 'agent',
-    statusArgs: ['--version'],
+    statusArgs: ['status', '--format', 'json'],
     loginArgs: ['login'],
     installHint:
       'Install the Cursor CLI (`curl https://cursor.com/install -fsS | bash`), then run `agent login` (or set CURSOR_API_KEY).',
@@ -250,9 +250,22 @@ const DESCRIPTORS: readonly ProviderDescriptor[] = [
 
 function parseCursorStatus(result: ProviderCommandResult): ProviderConnectionState | null {
   if (result.errorCode === 'ENOENT') return 'not-installed';
-  if (process.env.CURSOR_API_KEY?.trim()) return 'connected';
-  if (result.exitCode === 0) return 'connected';
   if (result.exitCode === null && result.errorCode) return 'not-installed';
+  try {
+    const parsed: unknown = JSON.parse(result.stdout);
+    if (parsed && typeof parsed === 'object') {
+      const row = parsed as Record<string, unknown>;
+      if (row.isAuthenticated === true || row.status === 'authenticated') return 'connected';
+      if (row.isAuthenticated === false || row.status === 'unauthenticated') {
+        return process.env.CURSOR_API_KEY?.trim() ? 'connected' : 'disconnected';
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+  // API-key auth never needs `agent login`; honour it when the JSON probe is inconclusive.
+  if (process.env.CURSOR_API_KEY?.trim()) return 'connected';
+  if (result.exitCode === 0) return 'disconnected';
   return 'disconnected';
 }
 
