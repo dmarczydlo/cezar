@@ -4988,6 +4988,7 @@ export function createApp(deps: ServerDeps) {
         claude: modelPresetSchema,
         codex: modelPresetSchema,
         opencode: modelPresetSchema,
+        cursor: modelPresetSchema,
       })
       .optional(),
     // Concurrency + memory guard (Settings → Resources). maxParallel clamps to

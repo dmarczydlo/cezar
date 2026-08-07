@@ -234,6 +234,7 @@ export const runnerModelsSchema = z.object({
   claude: z.string().optional(),
   codex: z.string().optional(),
   opencode: z.string().optional(),
+  cursor: z.string().optional(),
 });
 export type RunnerModels = z.infer<typeof runnerModelsSchema>;
 
@@ -280,6 +281,7 @@ export const setConfigInputSchema = z.object({
       claude: z.string().trim().max(200).nullable().optional(),
       codex: z.string().trim().max(200).nullable().optional(),
       opencode: z.string().trim().max(200).nullable().optional(),
+      cursor: z.string().trim().max(200).nullable().optional(),
     })
     .optional(),
   maxParallel: z.number().int().min(1).max(16).optional(),
