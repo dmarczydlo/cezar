@@ -34,6 +34,7 @@ import { TasksOverviewRoute } from './routes/tasks-overview'
 import { AutomationsRoute } from './routes/automations/automations'
 import { NewMultiTargetRoute } from './routes/ext-multirepo/new-multi-target'
 import { MultiTargetGroupRoute } from './routes/ext-multirepo/group'
+import { MultirepoBoardRoute } from './routes/ext-multirepo/board'
 
 /** Lazy ON PURPOSE: the thread view carries the markdown stack (Streamdown + remark/rehype,
  *  ~140 KB gz) — as a static import it would sit in the main bundle every visitor pays for
@@ -516,6 +517,7 @@ export function AppRoutes() {
       {/* Multirepo extension (isolated) — workspace-level routes; stock new-task untouched. */}
       <Route path="/ext/multirepo/new" element={<NewMultiTargetRoute />} />
       <Route path="/ext/multirepo/groups/:groupId" element={<MultiTargetGroupRoute />} />
+      <Route path="/ext/multirepo/board" element={<MultirepoBoardRoute />} />
 
       {/* Global settings (multi-project spec, step 3.5) — the one cockpit area that is NOT
           under `/p/:projectId`, because nothing here belongs to a project: appearance and

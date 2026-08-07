@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { API_PREFIX } from '@open-mercato/cezar-api-client'
 import { useProjects } from '@/api/queries'
 import { issueSeedText } from './board-form'
-import { buildSubmitBody, toggleProjectId, withOmSpecRefineHint, type MultiTargetPlanItem } from './new-multi-target-form'
+import { buildSubmitBody, toggleProjectId, type MultiTargetPlanItem } from './new-multi-target-form'
 
 type SourceRef = { kind: 'compose' | 'jira' | 'github' | 'file'; key?: string; url?: string }
 
@@ -38,22 +38,20 @@ export function NewMultiTargetRoute() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [autonomous, setAutonomous] = useState(true)
-  const [omSpecRefine, setOmSpecRefine] = useState(false)
 
   const registry = projects.data?.projects ?? []
   const canPlan = task.trim().length > 0 && selected.length >= 2
-  const effectiveTask = withOmSpecRefineHint(task, omSpecRefine)
 
   const submitPreview = useMemo(
     () =>
       buildSubmitBody({
-        task: effectiveTask,
+        task,
         selectedProjectIds: selected,
         items: items ?? undefined,
         sourceRef,
         autonomous,
       }),
-    [effectiveTask, selected, items, sourceRef, autonomous],
+    [task, selected, items, sourceRef, autonomous],
   )
 
   async function plan() {
@@ -63,7 +61,7 @@ export function NewMultiTargetRoute() {
       const res = await fetch(`${API_PREFIX}/ext/multirepo/multi-target/plan`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ task: effectiveTask, projectIds: selected }),
+        body: JSON.stringify({ task, projectIds: selected }),
       })
       const json = (await res.json()) as {
         items?: MultiTargetPlanItem[]
@@ -85,7 +83,7 @@ export function NewMultiTargetRoute() {
   async function start() {
     setError(null)
     const body = buildSubmitBody({
-      task: effectiveTask,
+      task,
       selectedProjectIds: selected,
       items: items ?? undefined,
       sourceRef,
@@ -195,18 +193,6 @@ export function NewMultiTargetRoute() {
           onChange={(e) => setAutonomous(e.target.checked)}
         />
         Autonomous
-      </label>
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={omSpecRefine}
-          onChange={(e) => {
-            setOmSpecRefine(e.target.checked)
-            setItems(null)
-          }}
-        />
-        Refine with om-spec-writing hint before plan/start
       </label>
 
       {items ? (
