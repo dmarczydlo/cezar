@@ -15,6 +15,7 @@ const ALL_STATUSES: ProviderStatusResponse = {
     { provider: 'claude', status: 'connected', enabled: true },
     { provider: 'codex', status: 'disconnected', enabled: true },
     { provider: 'opencode', status: 'not-installed', enabled: true },
+    { provider: 'cursor', status: 'not-installed', enabled: true },
   ],
 }
 
@@ -74,10 +75,10 @@ function serve({
       if (url === '/api/v1/providers/connect' && method === 'POST') {
         return json(connect, connectCode)
       }
-      if (/^\/api\/v1\/providers\/(claude|codex|opencode)\/enabled$/.test(url) && method === 'PUT') {
+      if (/^\/api\/v1\/providers\/(claude|codex|opencode|cursor)\/enabled$/.test(url) && method === 'PUT') {
         return enabledResponses.shift() ?? json(status)
       }
-      if (/^\/api\/v1\/providers\/(claude|codex|opencode)\/retry$/.test(url) && method === 'POST') {
+      if (/^\/api\/v1\/providers\/(claude|codex|opencode|cursor)\/retry$/.test(url) && method === 'POST') {
         return json(retry, retryCode)
       }
       return new Promise<never>(() => {})
@@ -114,7 +115,7 @@ afterEach(() => {
 })
 
 describe('ProviderSettings', () => {
-  it('always renders Claude Code, Codex, and OpenCode cards in that order', async () => {
+  it('always renders Claude Code, Codex, OpenCode, and Cursor cards in that order', async () => {
     serve()
     renderSettings()
 
@@ -123,7 +124,7 @@ describe('ProviderSettings', () => {
       [...document.querySelectorAll('[data-slot="provider-card"]')].map((item) =>
         item.querySelector('h3')?.textContent,
       ),
-    ).toEqual(['Claude Code', 'Codex', 'OpenCode'])
+    ).toEqual(['Claude Code', 'Codex', 'OpenCode', 'Cursor'])
   })
 
   it('presents discovery truth, enablement, and runtime recovery without hiding diagnostics', async () => {
@@ -139,6 +140,7 @@ describe('ProviderSettings', () => {
             authFailureId: 'open-1',
             hint: 'Authentication was rejected during a run. Reconnect, then try again.',
           },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
       refreshStatus: {
@@ -152,6 +154,7 @@ describe('ProviderSettings', () => {
             authFailureId: 'open-1',
             hint: 'Authentication was rejected during a run. Reconnect, then try again.',
           },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     })
@@ -183,6 +186,7 @@ describe('ProviderSettings', () => {
           { provider: 'claude', status: 'connected', enabled: true },
           { provider: 'codex', status: 'unknown', enabled: true },
           { provider: 'opencode', status: 'connected', enabled: true },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     })
@@ -244,6 +248,7 @@ describe('ProviderSettings', () => {
           { provider: 'claude', status: 'connected', enabled: true },
           { provider: 'codex', status: 'connected', enabled: true },
           { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     })
@@ -265,7 +270,7 @@ describe('ProviderSettings', () => {
 
     expect(await screen.findByText('Provider status could not be loaded')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
-    expect(document.querySelectorAll('[data-slot="provider-card"]')).toHaveLength(3)
+    expect(document.querySelectorAll('[data-slot="provider-card"]')).toHaveLength(4)
   })
 
   it('treats a malformed successful response as a safe verification error', async () => {
@@ -275,7 +280,7 @@ describe('ProviderSettings', () => {
 
     expect(await screen.findByText('Provider status could not be loaded')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
-    expect(document.querySelectorAll('[data-slot="provider-card"]')).toHaveLength(3)
+    expect(document.querySelectorAll('[data-slot="provider-card"]')).toHaveLength(4)
     expect(screen.queryByText(secret)).toBeNull()
   })
 
@@ -347,7 +352,8 @@ describe('ProviderSettings', () => {
         { provider: 'claude', status: 'connected', enabled: false },
         { provider: 'codex', status: 'disconnected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     })))
     await waitFor(() => expect(requests.filter((request) => request.url.endsWith('/enabled'))).toHaveLength(2))
     expect(requests.filter((request) => request.url.endsWith('/enabled')).map((request) => request.body)).toEqual([
@@ -395,7 +401,8 @@ describe('ProviderSettings', () => {
         { provider: 'claude', status: 'connected', enabled: true },
         { provider: 'codex', status: 'disconnected', enabled: false },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     })))
     await within(card('codex')).findByText('Disabled')
   })
@@ -418,7 +425,8 @@ describe('ProviderSettings', () => {
         { provider: 'claude', status: 'connected', enabled: false },
         { provider: 'codex', status: 'disconnected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     })))
     await waitFor(() => expect(requests.filter((request) => request.url.endsWith('/enabled'))).toHaveLength(2))
     expect(requests.at(-1)).toMatchObject({ url: '/api/v1/providers/codex/enabled', body: { enabled: false } })
@@ -428,7 +436,8 @@ describe('ProviderSettings', () => {
         { provider: 'claude', status: 'connected', enabled: false },
         { provider: 'codex', status: 'disconnected', enabled: false },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     })))
     await within(card('claude')).findByText('Disabled')
     await within(card('codex')).findByText('Disabled')
@@ -447,7 +456,8 @@ describe('ProviderSettings', () => {
         },
         { provider: 'codex' as const, status: 'disconnected' as const, enabled: true },
         { provider: 'opencode' as const, status: 'not-installed' as const, enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     }
     serve({
       status: incidentStatus,
@@ -457,6 +467,7 @@ describe('ProviderSettings', () => {
           { provider: 'claude', status: 'connected', enabled: true },
           { provider: 'codex', status: 'disconnected', enabled: true },
           { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     })
@@ -511,7 +522,8 @@ describe('ProviderSettings', () => {
         { provider: 'claude', status: 'connected', enabled: true },
         { provider: 'codex', status: 'disconnected', enabled: true },
         { provider: 'opencode', status: 'disconnected', enabled: false, authFailureId: 'open-1' },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     }
     serve({
       status: incidentStatus,
@@ -520,6 +532,7 @@ describe('ProviderSettings', () => {
           { provider: 'claude', status: 'connected', enabled: true },
           { provider: 'codex', status: 'disconnected', enabled: true },
           { provider: 'opencode', status: 'connected', enabled: false },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     })
@@ -543,7 +556,8 @@ describe('ProviderSettings', () => {
         { provider: 'claude', status: 'connected', enabled: true },
         { provider: 'codex', status: 'disconnected', enabled: true, authFailureId: 'newer-incident' },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     }
     serve({ status: incidentStatus, retry: { error: 'That incident is no longer current.' }, retryCode: 409 })
     renderSettings()

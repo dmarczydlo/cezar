@@ -144,6 +144,10 @@ function serve(
       if (url === '/api/v1/projects' && method === 'GET') {
         return json({ projects: [], bootProject: 'boot', projectsDir: '~/cezar/projects' })
       }
+      if (String(input).startsWith('/api/v1/models?runner=')) {
+        const runner = String(input).includes('cursor') ? 'cursor' : 'codex'
+        return json({ runner, models: [], source: 'unavailable', stale: false })
+      }
       return new Promise<never>(() => {})
     }),
   )

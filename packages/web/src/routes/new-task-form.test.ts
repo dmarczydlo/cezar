@@ -74,10 +74,31 @@ describe('model option resolution', () => {
     expect(modelsForRunner('codex', catalog, ['legacy-id']).at(-1)?.desc).toBe('Custom or legacy model')
   })
 
+  it('cursor: auto plus host-discovered ids from a per-runner map', () => {
+    const catalogs = {
+      cursor: {
+        runner: 'cursor' as const,
+        models: [{ id: 'composer-2.5', label: 'Composer 2.5', description: '' }],
+        source: 'live' as const,
+        stale: false,
+      },
+    }
+    expect(modelsForRunner('cursor', catalogs).map((m) => m.id)).toEqual(['', 'composer-2.5'])
+    expect(modelsForRunner('codex', catalogs).map((m) => m.id)).toEqual([''])
+  })
+
   it('reports stale and unavailable Codex catalogs without exposing reasons', () => {
     expect(modelCatalogStatus('codex', { runner: 'codex', models: [], source: 'cache', stale: true, reason: 'raw' })).toBe('Using cached Codex model list')
     expect(modelCatalogStatus('codex', { runner: 'codex', models: [], source: 'unavailable', stale: false, reason: 'raw' })).toBe('Latest Codex models unavailable')
     expect(modelCatalogStatus('claude', undefined, true)).toBeUndefined()
+  })
+
+  it('reports Cursor catalog status the same way', () => {
+    expect(
+      modelCatalogStatus('cursor', {
+        cursor: { runner: 'cursor', models: [], source: 'unavailable', stale: false },
+      }),
+    ).toBe('Latest Cursor models unavailable')
   })
 
   it('opencode: provider/model ids, newest Anthropic + OpenAI', () => {
