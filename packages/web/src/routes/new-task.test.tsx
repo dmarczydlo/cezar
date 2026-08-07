@@ -98,16 +98,18 @@ const PROVIDERS_CONNECTED: ProviderStatusResponse = {
     { provider: 'codex', status: 'disconnected', enabled: true },
     { provider: 'opencode', status: 'not-installed', enabled: true },
     { provider: 'cursor', status: 'not-installed', enabled: true },
-        ],
+  ],
 }
 
+/** Two usable runners (claude + codex). Cursor stays not-installed so multi-backend
+ *  scenarios stay a 2-choice pill unless a test opts Cursor in explicitly. */
 const PROVIDERS_MULTI: ProviderStatusResponse = {
   providers: [
     { provider: 'claude', status: 'connected', enabled: true },
     { provider: 'codex', status: 'connected', enabled: true },
     { provider: 'opencode', status: 'disconnected', enabled: true },
-    { provider: 'cursor', status: 'connected', enabled: true },
-        ],
+    { provider: 'cursor', status: 'not-installed', enabled: true },
+  ],
 }
 
 const PROVIDERS_NONE: ProviderStatusResponse = {
@@ -116,7 +118,7 @@ const PROVIDERS_NONE: ProviderStatusResponse = {
     { provider: 'codex', status: 'not-installed', enabled: true },
     { provider: 'opencode', status: 'disconnected', enabled: true },
     { provider: 'cursor', status: 'disconnected', enabled: true },
-        ],
+  ],
 }
 
 const SKILLS: Skill[] = [
@@ -447,7 +449,7 @@ describe('picker data flows', () => {
           { provider: 'claude', status: 'connected', enabled: false },
           { provider: 'codex', status: 'connected', enabled: true },
           { provider: 'opencode', status: 'connected', enabled: false },
-          { provider: 'cursor', status: 'connected', enabled: true },
+          { provider: 'cursor', status: 'connected', enabled: false },
         ],
       },
     })
@@ -456,6 +458,39 @@ describe('picker data flows', () => {
 
     expect(document.querySelector('[data-slot="runner-pill"]')).toBeNull()
     expect(textarea().disabled).toBe(false)
+  })
+
+  it('offers Cursor in the runner pill when the provider is connected and enabled', async () => {
+    serve({
+      health: {
+        ...HEALTH,
+        checks: [
+          { name: 'claude', available: true },
+          { name: 'codex', available: true },
+          { name: 'cursor', available: true },
+          { name: 'git', available: true },
+        ],
+      },
+      providerStatus: {
+        providers: [
+          { provider: 'claude', status: 'connected', enabled: true },
+          { provider: 'codex', status: 'disconnected', enabled: true },
+          { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'cursor', status: 'connected', enabled: true },
+        ],
+      },
+    })
+    renderNewTask()
+    await pillReady()
+
+    const runnerPill = document.querySelector('[data-slot="runner-pill"]') as HTMLElement
+    await waitFor(() => expect(runnerPill).not.toBeNull())
+    fireEvent.pointerDown(runnerPill)
+    const options = await screen.findAllByRole('menuitemradio')
+    expect(options.map((option) => option.textContent)).toEqual([
+      expect.stringContaining('claude'),
+      expect.stringContaining('cursor'),
+    ])
   })
 
   it('drops a persisted model preset that belongs to another runner', async () => {

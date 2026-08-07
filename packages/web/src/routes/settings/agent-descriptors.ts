@@ -103,8 +103,16 @@ export const AGENT_DESCRIPTORS: AgentDescriptor[] = [
   {
     id: 'cursor',
     label: 'Cursor',
-    note: 'Cursor Agent CLI (`agent`). Auth via `agent login` or CURSOR_API_KEY. No project config files managed here yet.',
-    groups: [],
+    note: 'Cursor Agent CLI (`agent`). Auth via `agent login` or CURSOR_API_KEY. No separate memory file — instructions live in rules/MCP elsewhere.',
+    groups: [
+      group('cursor', 'settings', 'Settings'),
+      group(
+        'cursor',
+        'mcp',
+        'MCP',
+        'User ~/.cursor/mcp.json and project .cursor/mcp.json.',
+      ),
+    ],
   },
 ]
 

@@ -1,13 +1,14 @@
+import { firstConfiguredModel, readNativeSettingsFiles } from './shared.ts';
 import type { AgentModelSettingsStrategy } from './types.ts';
 
 /**
- * Cursor Agent CLI has no project/user settings files cezar manages yet
- * (Settings → Agents → Cursor groups are empty). Native model defaults are
- * therefore always unset — the runner decides, or a Cezar preset applies.
+ * Cursor Agent CLI keeps the selected model in `~/.cursor/cli-config.json`
+ * (`model.displayModelId` / `model.modelId`). Project `.cursor/cli.json` is
+ * permissions-only and is not a model source.
  */
 export const cursorModelSettingsStrategy: AgentModelSettingsStrategy = {
   runner: 'cursor',
-  async read() {
-    return {};
+  async read(repoRoot, env) {
+    return { model: firstConfiguredModel(await readNativeSettingsFiles('cursor', repoRoot, env)) };
   },
 };

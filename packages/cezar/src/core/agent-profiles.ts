@@ -89,5 +89,5 @@ const PROFILE_DIR_MARKERS: Record<ProviderId, readonly string[]> = {
   claude: ['.claude.json', 'settings.json', 'projects', 'sessions'],
   codex: ['auth.json', 'config.toml'],
   opencode: [],
-  cursor: [],
+  cursor: ['cli-config.json'],
 };
