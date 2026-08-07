@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createRunner } from '../../../core/runner-factory.ts';
+import { createRunner } from './runner-factory.ts';
 import {
   buildCursorArgs,
   CursorAgentRunner,

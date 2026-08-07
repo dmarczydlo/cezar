@@ -654,6 +654,7 @@ const providerAuthDismissalsSchema = z
     claude: z.string().min(1).max(128).optional(),
     codex: z.string().min(1).max(128).optional(),
     opencode: z.string().min(1).max(128).optional(),
+    cursor: z.string().min(1).max(128).optional(),
   })
   .strict();
 
@@ -2980,6 +2981,7 @@ export function createApp(deps: ServerDeps) {
             claude: z.string().trim().min(1).max(200).nullable().optional(),
             codex: z.string().trim().min(1).max(200).nullable().optional(),
             opencode: z.string().trim().min(1).max(200).nullable().optional(),
+            cursor: z.string().trim().min(1).max(200).nullable().optional(),
           })
           .optional(),
       })
@@ -5410,6 +5412,8 @@ export function resumeCommand(runner: string | undefined, sessionId: string): st
       return `codex resume ${sessionId}`;
     case 'opencode':
       return `opencode --session ${sessionId}`;
+    case 'cursor':
+      return `agent --resume ${sessionId}`;
     default:
       return `claude --resume ${sessionId}`;
   }

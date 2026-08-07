@@ -27,6 +27,9 @@ export const KNOWN_PRESETS_BY_RUNNER: Record<RunnerId, readonly string[]> = {
     'openai/gpt-5.1',
     'openai/gpt-5.1-codex',
   ],
+  // Cursor models are discovered from the CLI / Settings — no hard-coded presets
+  // that could conflict with another runner's ids.
+  cursor: [],
 };
 
 /** True when `model` is recognizably a preset of a runner OTHER than `runner` (and not also

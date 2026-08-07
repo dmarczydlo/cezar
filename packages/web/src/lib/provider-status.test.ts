@@ -15,7 +15,7 @@ const CONNECTED: ProviderStatusResponse = {
     { provider: 'claude', status: 'connected', enabled: true },
     { provider: 'codex', status: 'connected', enabled: true },
     { provider: 'opencode', status: 'connected', enabled: true },
-  { provider: 'cursor', status: 'connected', enabled: true },
+    { provider: 'cursor', status: 'connected', enabled: true },
   ],
 }
 

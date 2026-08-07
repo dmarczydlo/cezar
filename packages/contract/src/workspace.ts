@@ -63,6 +63,7 @@ export const workspaceConfigResponseSchema = z.object({
       claude: z.string().optional(),
       codex: z.string().optional(),
       opencode: z.string().optional(),
+      cursor: z.string().optional(),
     }).optional(),
   }),
 });
@@ -95,6 +96,7 @@ export const setWorkspaceConfigInputSchema = z.object({
           claude: z.string().trim().min(1).max(200).nullable().optional(),
           codex: z.string().trim().min(1).max(200).nullable().optional(),
           opencode: z.string().trim().min(1).max(200).nullable().optional(),
+          cursor: z.string().trim().min(1).max(200).nullable().optional(),
         })
         .optional(),
     })
@@ -206,6 +208,7 @@ export const workspaceUiStateSchema = z.looseObject({
       claude: z.string().optional(),
       codex: z.string().optional(),
       opencode: z.string().optional(),
+      cursor: z.string().optional(),
     })
     .optional(),
   /** Settings → Appearance, GLOBAL since step 3.5: accent + density describe the person at the

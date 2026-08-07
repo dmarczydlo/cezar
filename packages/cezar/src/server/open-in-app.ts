@@ -125,14 +125,15 @@ function editorAvailable(editor: EditorDef): boolean {
 /** Coding-agent CLIs a session can be handed off to (#cli-handoff). Selecting one opens a
  *  terminal that resumes THIS run's session when the runner matches, or launches a fresh CLI in
  *  the worktree otherwise. The actual command is built server-side (needs the run's session). */
-const AGENT_CLIS: Array<{ runner: 'claude' | 'codex' | 'opencode'; label: string; icon: string; bin: string; envBin?: string }> = [
+const AGENT_CLIS: Array<{ runner: 'claude' | 'codex' | 'opencode' | 'cursor'; label: string; icon: string; bin: string; envBin?: string }> = [
   { runner: 'claude', label: 'Claude CLI', icon: 'claude', bin: 'claude', envBin: process.env.CEZ_CLAUDE_BIN },
   { runner: 'codex', label: 'Codex CLI', icon: 'codex', bin: 'codex', envBin: process.env.CEZ_CODEX_BIN },
   { runner: 'opencode', label: 'OpenCode', icon: 'opencode', bin: 'opencode', envBin: process.env.CEZ_OPENCODE_BIN },
+  { runner: 'cursor', label: 'Cursor Agent', icon: 'cursor', bin: 'agent', envBin: process.env.CEZ_CURSOR_AGENT_BIN },
 ];
 
 /** The runner behind a `cli:<runner>` open target, or null when the id isn't a CLI handoff. */
-export function agentCliRunner(targetId: string): 'claude' | 'codex' | 'opencode' | null {
+export function agentCliRunner(targetId: string): 'claude' | 'codex' | 'opencode' | 'cursor' | null {
   const match = AGENT_CLIS.find((c) => `cli:${c.runner}` === targetId);
   return match ? match.runner : null;
 }
