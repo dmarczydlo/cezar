@@ -2,7 +2,7 @@ import type { AgentBackend, AgentRunner, RunnerId } from './agent-runner.ts';
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
-import { CursorAgentRunner } from '../ext/multirepo/cursor/cursor-agent-runner.ts';
+import { CursorAgentRunner } from './cursor-agent-runner.ts';
 
 /**
  * The single place that maps a backend id onto a concrete runner. Everything

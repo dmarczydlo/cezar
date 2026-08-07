@@ -34,7 +34,7 @@ describe('provider action gate', () => {
       ],
     };
 
-    expect(providersRequiredByWorkflow(workflow, 'claude')).toEqual(['claude', 'codex', 'opencode']);
+    expect(providersRequiredByWorkflow(workflow, 'claude')).toEqual(['claude', 'codex', 'opencode', 'cursor']);
   });
 
   it('reports disabled before missing credentials', () => {
@@ -43,6 +43,7 @@ describe('provider action gate', () => {
         { provider: 'claude', status: 'connected', enabled: true },
         { provider: 'codex', status: 'connected', enabled: false },
         { provider: 'opencode', status: 'not-installed', enabled: true },
+      { provider: 'cursor', status: 'not-installed', enabled: true },
       ],
     })).toBe('Codex is disabled. Enable it in Settings → Agents → Providers.');
   });

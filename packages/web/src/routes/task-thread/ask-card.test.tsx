@@ -25,6 +25,7 @@ afterEach(() => {
       { provider: 'claude', status: 'connected', enabled: true },
       { provider: 'codex', status: 'not-installed', enabled: true },
       { provider: 'opencode', status: 'not-installed', enabled: true },
+      { provider: 'cursor', status: 'not-installed', enabled: true },
     ],
   }
 })
@@ -185,6 +186,7 @@ describe('AskCard', () => {
         claude,
         { provider: 'codex', status: 'connected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
+        { provider: 'cursor', status: 'not-installed', enabled: true },
       ],
     }
 
@@ -261,6 +263,7 @@ describe('AskCard — answering after the session has ended', () => {
         { provider: 'claude', status: 'disconnected', enabled: true },
         { provider: 'codex', status: 'connected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
+        { provider: 'cursor', status: 'not-installed', enabled: true },
       ],
     }
 

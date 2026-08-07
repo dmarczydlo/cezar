@@ -1,8 +1,12 @@
 /**
  * Cursor Agent CLI runner (`agent`) — headless print mode.
- * Impl lives in ext/multirepo; core only registers via createRunner.
  *
  * Continue / multi-turn: v1 is fresh-session only (print mode exits when done).
+ * `sendMessage` returns false and emits a note; a follow-up run starts a new
+ * `agent -p` process. Resume via Cursor `--resume` is a future enhancement.
+ *
+ * Emits v1 `AgentEvent`s and, when `opts.onUiEvent` is set, protocol v2
+ * `UiEvent`s alongside (same pattern as claude/codex/opencode).
  */
 
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -17,11 +21,16 @@ import type {
   AgentToolCallRecord,
   ContentBlock,
   SessionOptions,
-} from '../../../core/agent-runner.ts';
-import { isSignalTerminationExit, prependSystemPrompt } from '../../../core/agent-runner.ts';
-import { buildChildEnv } from '../../../core/agent-env.ts';
-import { readNdjson } from '../../../core/ndjson.ts';
-import { mapCursorStreamEvent } from './cursor-ui-mapper.ts';
+} from './agent-runner.ts';
+import { isSignalTerminationExit, prependSystemPrompt } from './agent-runner.ts';
+import { buildChildEnv } from './agent-env.ts';
+import { readNdjson } from './ndjson.ts';
+import {
+  createCursorUiState,
+  mapCursorMessage,
+  mapCursorStreamEvent,
+  type CursorUiMapping,
+} from './cursor-ui-mapper.ts';
 
 export const DEFAULT_CURSOR_TIMEOUT_MS = 30 * 60_000;
 export const CURSOR_KILL_GRACE_MS = 10_000;
@@ -50,7 +59,7 @@ export function buildCursorArgs(input: BuildCursorArgsInput): string[] {
 }
 
 export function mockCursorAgentPath(): string {
-  return resolvePath(dirname(fileURLToPath(import.meta.url)), 'mock-agent.mjs');
+  return resolvePath(dirname(fileURLToPath(import.meta.url)), '__fixtures__/cursor/mock-agent.mjs');
 }
 
 export function resolveCursorBin(optsBin?: string): string {
@@ -93,7 +102,7 @@ export class CursorAgentRunner implements AgentRunner {
   startSession(
     spec: AgentRunSpec,
     onEvent?: (event: AgentEvent) => void,
-    _opts: SessionOptions = {},
+    opts: SessionOptions = {},
   ): AgentSession {
     const args = buildCursorArgs({
       userPrompt: spec.userPrompt,
@@ -125,6 +134,19 @@ export class CursorAgentRunner implements AgentRunner {
     let terminatedByCezar = false;
     let timedOut = false;
     const stderrChunks: string[] = [];
+
+    let uiState = createCursorUiState({ fallbackSessionId: spec.sessionId });
+    const emitUi = (map: (state: typeof uiState) => CursorUiMapping): void => {
+      try {
+        const mapped = map(uiState);
+        uiState = mapped.state;
+        if (opts.onUiEvent) {
+          for (const event of mapped.events) opts.onUiEvent(event);
+        }
+      } catch {
+        // v2 mapping is best-effort; v1 consumers stay unaffected.
+      }
+    };
 
     const emit = (event: AgentEvent) => {
       if (event.type === 'text') textChunks.push(event.text);
@@ -168,6 +190,7 @@ export class CursorAgentRunner implements AgentRunner {
           } catch {
             continue;
           }
+          emitUi((state) => mapCursorMessage(parsed, state));
           for (const event of mapCursorStreamEvent(parsed)) emit(event);
         }
       } catch {

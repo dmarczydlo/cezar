@@ -35,7 +35,7 @@ id — that is the whole point of the seam.
 ### Identity
 
 ```ts
-type RunnerId    = 'claude' | 'codex' | 'opencode';   // user-selectable
+type RunnerId    = 'claude' | 'codex' | 'opencode' | 'cursor';   // user-selectable
 type AgentBackend = RunnerId | 'claude-cli';          // + legacy id, still parses
 ```
 

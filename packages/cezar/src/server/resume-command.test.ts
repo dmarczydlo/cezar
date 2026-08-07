@@ -14,6 +14,7 @@ describe('resumeCommand — session id validation', () => {
     expect(resumeCommand(undefined, id)).toBe(`claude --resume ${id}`);
     expect(resumeCommand('codex', id)).toBe(`codex resume ${id}`);
     expect(resumeCommand('opencode', id)).toBe(`opencode --session ${id}`);
+    expect(resumeCommand('cursor', id)).toBe(`agent --resume ${id}`);
   });
 
   it('never emits a quote character — a POSIX quote would reach cmd.exe literally on win32', () => {

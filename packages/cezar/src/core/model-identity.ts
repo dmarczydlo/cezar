@@ -89,6 +89,9 @@ export const BACKEND_MODEL_MAP: Readonly<Record<AgentBackend, BackendModelMap>> 
   // opencode selects across providers, so a bare model is ambiguous: reject it
   // loudly rather than let the server pick a default the user never asked for.
   opencode: {},
+  // Cursor Agent CLI accepts bare model ids from `agent models` / Settings;
+  // no defaultProvider — discovery fills the picker.
+  cursor: {},
 };
 
 const SLASH = '/';

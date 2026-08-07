@@ -68,7 +68,7 @@ type Recorded = { method: string; url: string; body?: unknown }
 let requests: Recorded[]
 
 const providersForHealth = (health: HealthResponse): ProviderStatusResponse => ({
-  providers: (['claude', 'codex', 'opencode'] as const).map((provider) => ({
+  providers: (['claude', 'codex', 'opencode', 'cursor'] as const).map((provider) => ({
     provider,
     status: health.checks.some((check) => check.name === provider && check.available)
       ? 'connected' as const

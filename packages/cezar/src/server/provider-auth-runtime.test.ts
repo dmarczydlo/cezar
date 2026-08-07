@@ -22,10 +22,16 @@ const CONNECTED_OUTPUT: Record<ProviderId, string> = {
     '●  Anthropic oauth',
     '└  1 credential',
   ].join('\n'),
+  cursor: JSON.stringify({
+    status: 'authenticated',
+    isAuthenticated: true,
+    userInfo: { email: 'dev@example.com' },
+  }),
 };
 
 const providerForExecutable = (executable: string): ProviderId => {
   if (executable === 'claude' || executable === 'codex' || executable === 'opencode') return executable;
+  if (executable === 'agent') return 'cursor';
   throw new Error(`unexpected executable: ${executable}`);
 };
 
