@@ -209,3 +209,10 @@ export { planMultiTarget, fallbackMultiTargetPlan } from './multi-target-plan.ts
 export { startMultiTargetRuns } from './multi-target-start.ts';
 export { findMultiTargetGroup } from './multi-target-groups.ts';
 export { extractJiraIssueKey, withJiraIssueKey } from './pr-issue-key.ts';
+export {
+  listJiraIssues,
+  mapJiraSearchJson,
+  type JiraBoardConfig,
+  type JiraIssueSummary,
+  type JiraListResult,
+} from './board/jira.ts';
