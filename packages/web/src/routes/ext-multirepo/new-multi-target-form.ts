@@ -62,3 +62,8 @@ export function withOmSpecRefineHint(task: string, enabled: boolean): string {
   if (task.includes('om-spec-writing')) return task
   return `${OM_SPEC_REFINE_HINT}${task}`
 }
+
+/** Seed the multi-repo composer from a Jira issue (query params or board picker). */
+export function issueSeedText(issue: { key: string; summary: string; url: string }): string {
+  return `${issue.key}: ${issue.summary}\n\n${issue.url}\n`
+}

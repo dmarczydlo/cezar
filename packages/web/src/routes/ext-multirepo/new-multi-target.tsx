@@ -2,8 +2,14 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { API_PREFIX } from '@open-mercato/cezar-api-client'
 import { useProjects } from '@/api/queries'
-import { issueSeedText } from './board-form'
-import { buildSubmitBody, toggleProjectId, withOmSpecRefineHint, type MultiTargetPlanItem } from './new-multi-target-form'
+import { Composer } from '@/components/composer/composer'
+import {
+  buildSubmitBody,
+  issueSeedText,
+  toggleProjectId,
+  withOmSpecRefineHint,
+  type MultiTargetPlanItem,
+} from './new-multi-target-form'
 
 type SourceRef = { kind: 'compose' | 'jira' | 'github' | 'file'; key?: string; url?: string }
 
@@ -22,7 +28,9 @@ function sourceRefFromSearch(params: URLSearchParams): { task: string; sourceRef
 
 /**
  * Isolated multirepo New-task UI — plan-then-parallel across selected projects.
- * Stock `/p/:id/new` is unchanged.
+ * Stock `/p/:id/new` is unchanged. Reuses the shared Composer so `/` skills work
+ * the same way as on `/new` (`@` file mentions stay plain text here — same as `/new`
+ * until a worktree files source exists for multi-project compose).
  */
 export function NewMultiTargetRoute() {
   const projects = useProjects()
@@ -56,14 +64,21 @@ export function NewMultiTargetRoute() {
     [effectiveTask, selected, items, sourceRef, autonomous],
   )
 
-  async function plan() {
+  function onTaskChange(next: string) {
+    setTask(next)
+    setItems(null)
+    if (sourceRef.kind !== 'jira') setSourceRef({ kind: 'compose' })
+  }
+
+  async function planWith(taskText: string) {
     setError(null)
     setBusy(true)
+    const plannedTask = withOmSpecRefineHint(taskText, omSpecRefine)
     try {
       const res = await fetch(`${API_PREFIX}/ext/multirepo/multi-target/plan`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ task: effectiveTask, projectIds: selected }),
+        body: JSON.stringify({ task: plannedTask, projectIds: selected }),
       })
       const json = (await res.json()) as {
         items?: MultiTargetPlanItem[]
@@ -77,9 +92,14 @@ export function NewMultiTargetRoute() {
       setRationale(json.rationale ?? '')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+      throw err
     } finally {
       setBusy(false)
     }
+  }
+
+  async function plan() {
+    await planWith(task)
   }
 
   async function start() {
@@ -126,10 +146,6 @@ export function NewMultiTargetRoute() {
           <Link to="/" className="underline">
             Cockpit
           </Link>{' '}
-          ·{' '}
-          <Link to="/ext/multirepo/board" className="underline">
-            Jira board
-          </Link>{' '}
           · Multirepo
         </p>
         <h1 className="text-2xl font-semibold tracking-tight">New multi-repo task</h1>
@@ -141,24 +157,27 @@ export function NewMultiTargetRoute() {
         </p>
       </header>
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Specification</span>
-        <textarea
-          className="border-input bg-background min-h-40 rounded-md border p-3 font-mono text-sm"
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium">Specification</span>
+        <Composer
           value={task}
-          onChange={(e) => {
-            setTask(e.target.value)
-            setItems(null)
-            if (sourceRef.kind === 'jira') {
-              // Keep the Jira key/url for PR stamping even if the user edits the body.
-              setSourceRef((cur) => cur)
-            } else {
-              setSourceRef({ kind: 'compose' })
+          onValueChange={onTaskChange}
+          autoFocus
+          placeholder="Feature / acceptance criteria — / for skills…"
+          ariaLabel="Describe a multi-repo task"
+          sendAriaLabel="Plan"
+          disabled={busy}
+          autocompleteSkills
+          onSubmit={async (text) => {
+            // Composer clears optimistically on send; restore so Plan/Start can continue.
+            onTaskChange(text)
+            if (selected.length < 2) {
+              throw new Error('Select at least two projects, then Plan')
             }
+            await planWith(text)
           }}
-          placeholder="Feature / acceptance criteria…"
         />
-      </label>
+      </div>
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm font-medium">Target projects</legend>
@@ -238,7 +257,7 @@ export function NewMultiTargetRoute() {
           type="button"
           className="bg-secondary text-secondary-foreground rounded-md px-3 py-2 text-sm disabled:opacity-50"
           disabled={!canPlan || busy}
-          onClick={() => void plan()}
+          onClick={() => void plan().catch(() => {})}
         >
           {busy && !items ? 'Planning…' : 'Plan'}
         </button>

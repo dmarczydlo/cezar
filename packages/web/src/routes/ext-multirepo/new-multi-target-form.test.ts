@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildSubmitBody, toggleProjectId, withOmSpecRefineHint } from './new-multi-target-form'
+import {
+  buildSubmitBody,
+  issueSeedText,
+  toggleProjectId,
+  withOmSpecRefineHint,
+} from './new-multi-target-form'
 
 describe('buildSubmitBody', () => {
   it('uses multi-target payload when 2+ projects selected', () => {
@@ -48,5 +53,17 @@ describe('withOmSpecRefineHint', () => {
 
   it('leaves text alone when disabled', () => {
     expect(withOmSpecRefineHint('Add login', false)).toBe('Add login')
+  })
+})
+
+describe('issueSeedText', () => {
+  it('formats key, summary, and url for the composer', () => {
+    expect(
+      issueSeedText({
+        key: 'PLAT-1',
+        summary: 'Add Cursor',
+        url: 'https://example.atlassian.net/browse/PLAT-1',
+      }),
+    ).toBe('PLAT-1: Add Cursor\n\nhttps://example.atlassian.net/browse/PLAT-1\n')
   })
 })
