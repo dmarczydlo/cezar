@@ -5115,7 +5115,28 @@ export function createApp(deps: ServerDeps) {
     .route('/', workspaceEventsRoutes);
 
   // Isolated multirepo extension (fork) — keep this call the only upstream hook.
-  registerMultirepoExt({ app: workspaceV1 });
+  registerMultirepoExt({
+    app: workspaceV1,
+    getManager: async (projectId) => {
+      try {
+        const ctx = await contexts.context(projectId);
+        return {
+          startRun: ctx.manager.startRun.bind(ctx.manager),
+          store: ctx.store,
+        };
+      } catch {
+        return undefined;
+      }
+    },
+    resolveProjects: async (projectIds) => {
+      const listed = await listProjects();
+      const byId = new Map(listed.map((p) => [p.id, p]));
+      return projectIds.flatMap((id) => {
+        const hit = byId.get(id);
+        return hit ? [{ id: hit.id, name: hit.name || hit.id }] : [];
+      });
+    },
+  });
 
   // ---- mount ---------------------------------------------------------------
   // Scoped first, then the unscoped alias bound to the boot project. The paths are disjoint (no
