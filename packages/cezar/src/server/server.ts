@@ -127,6 +127,7 @@ import {
 } from '../workspace/projects.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { mergeWriteWorkspaceUiState, readWorkspaceUiState } from '../workspace/ui-state.ts';
+import { registerMultirepoExt } from '../ext/multirepo/index.ts';
 import { checkoutRepo, type CloneRunner } from './checkout.ts';
 import { ProjectContextError, ProjectContexts, type ProjectContext } from './project-context.ts';
 import { reviewGateEnabled } from '../runs/review-gate.ts';
@@ -5112,6 +5113,30 @@ export function createApp(deps: ServerDeps) {
     .route('/', fsBrowseRoutes)
     .route('/', automationChecksRoutes)
     .route('/', workspaceEventsRoutes);
+
+  // Isolated multirepo extension (fork) — keep this call the only upstream hook.
+  registerMultirepoExt({
+    app: workspaceV1,
+    getManager: async (projectId) => {
+      try {
+        const ctx = await contexts.context(projectId);
+        return {
+          startRun: ctx.manager.startRun.bind(ctx.manager),
+          store: ctx.store,
+        };
+      } catch {
+        return undefined;
+      }
+    },
+    resolveProjects: async (projectIds) => {
+      const listed = await listProjects();
+      const byId = new Map(listed.map((p) => [p.id, p]));
+      return projectIds.flatMap((id) => {
+        const hit = byId.get(id);
+        return hit ? [{ id: hit.id, name: hit.name || hit.id }] : [];
+      });
+    },
+  });
 
   // ---- mount ---------------------------------------------------------------
   // Scoped first, then the unscoped alias bound to the boot project. The paths are disjoint (no

@@ -1,0 +1,69 @@
+import { describe, expect, it } from 'vitest'
+import {
+  buildSubmitBody,
+  issueSeedText,
+  toggleProjectId,
+  withOmSpecRefineHint,
+} from './new-multi-target-form'
+
+describe('buildSubmitBody', () => {
+  it('uses multi-target payload when 2+ projects selected', () => {
+    const body = buildSubmitBody({
+      task: 'Feature X',
+      selectedProjectIds: ['platform-core-service', 'platform-web-admin'],
+      items: [
+        { projectId: 'platform-core-service', prompt: 'BE' },
+        { projectId: 'platform-web-admin', prompt: 'FE' },
+      ],
+      sourceRef: { kind: 'compose' },
+    })
+    expect(body.mode).toBe('multi-target')
+    if (body.mode === 'multi-target') {
+      expect(body.projectIds).toHaveLength(2)
+      expect(body.items?.[1].prompt).toBe('FE')
+    }
+  })
+
+  it('stays single-project when one id selected', () => {
+    const body = buildSubmitBody({
+      task: 'Feature X',
+      selectedProjectIds: ['platform-core-service'],
+    })
+    expect(body).toEqual({
+      mode: 'single',
+      task: 'Feature X',
+      projectId: 'platform-core-service',
+    })
+  })
+})
+
+describe('toggleProjectId', () => {
+  it('adds and removes ids', () => {
+    expect(toggleProjectId(['a'], 'b')).toEqual(['a', 'b'])
+    expect(toggleProjectId(['a', 'b'], 'a')).toEqual(['b'])
+  })
+})
+
+describe('withOmSpecRefineHint', () => {
+  it('prepends guidance when enabled', () => {
+    const out = withOmSpecRefineHint('Add login', true)
+    expect(out).toContain('om-spec-writing')
+    expect(out).toContain('Add login')
+  })
+
+  it('leaves text alone when disabled', () => {
+    expect(withOmSpecRefineHint('Add login', false)).toBe('Add login')
+  })
+})
+
+describe('issueSeedText', () => {
+  it('formats key, summary, and url for the composer', () => {
+    expect(
+      issueSeedText({
+        key: 'PLAT-1',
+        summary: 'Add Cursor',
+        url: 'https://example.atlassian.net/browse/PLAT-1',
+      }),
+    ).toBe('PLAT-1: Add Cursor\n\nhttps://example.atlassian.net/browse/PLAT-1\n')
+  })
+})
