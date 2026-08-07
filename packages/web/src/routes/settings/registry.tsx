@@ -11,6 +11,7 @@ import {
   KeyboardIcon,
   NotebookPenIcon,
   PaletteIcon,
+  TicketIcon,
 } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 
@@ -27,6 +28,7 @@ import { PromptTemplatesSection } from './prompt-templates-section'
 import { ResourcesSection } from './resources-section'
 import { SkillsSection } from './skills-section'
 import { WorktreesSection } from './worktrees-section'
+import { JiraBoardSection } from '@/routes/ext-multirepo/board'
 
 /**
  * The Settings section registry (R6 Step 1.3, spec §"Settings"): the ONE place a section is
@@ -57,6 +59,7 @@ export type SettingsSectionId =
   | 'prompt-templates'
   | 'keyboard'
   | 'skills'
+  | 'jira'
 
 /** Which settings area a section belongs to — and therefore which store it writes. */
 export type SettingsScope = 'project' | 'global'
@@ -178,6 +181,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'The workspace registry and where GitHub checkouts land.',
     icon: FoldersIcon,
     component: ProjectsSection,
+    scope: 'global',
+  },
+  {
+    id: 'jira',
+    title: 'Jira board',
+    description: 'Workspace Jira REST board for multi-repo tasks.',
+    icon: TicketIcon,
+    component: JiraBoardSection,
     scope: 'global',
   },
   {
