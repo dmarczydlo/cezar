@@ -1,4 +1,4 @@
-import { MoonIcon, PlusIcon } from 'lucide-react'
+import { LayersIcon, MoonIcon, PlusIcon } from 'lucide-react'
 import * as React from 'react'
 import { useHealth, useRuns, useSkills, useUiState } from '@/api/queries'
 import { useNavigate } from '@/lib/project-router'
@@ -144,6 +144,15 @@ function PaletteContent({ close }: { close: () => void }) {
             <PlusIcon aria-hidden="true" />
             New task
             <CommandShortcut>C</CommandShortcut>
+          </CommandItem>
+          <CommandItem
+            value="view multi-repo task"
+            data-slot="palette-view"
+            data-nav-to="/ext/multirepo/new"
+            onSelect={() => go('/ext/multirepo/new')}
+          >
+            <LayersIcon aria-hidden="true" />
+            Multi-repo task
           </CommandItem>
         </CommandGroup>
 
