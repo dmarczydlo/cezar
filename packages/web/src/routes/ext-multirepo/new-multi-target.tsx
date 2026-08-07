@@ -1,8 +1,24 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { API_PREFIX } from '@open-mercato/cezar-api-client'
 import { useProjects } from '@/api/queries'
-import { buildSubmitBody, toggleProjectId, type MultiTargetPlanItem } from './new-multi-target-form'
+import { issueSeedText } from './board-form'
+import { buildSubmitBody, toggleProjectId, withOmSpecRefineHint, type MultiTargetPlanItem } from './new-multi-target-form'
+
+type SourceRef = { kind: 'compose' | 'jira' | 'github' | 'file'; key?: string; url?: string }
+
+function sourceRefFromSearch(params: URLSearchParams): { task: string; sourceRef: SourceRef } {
+  const key = params.get('jiraKey')?.trim()
+  const summary = params.get('jiraSummary')?.trim()
+  const url = params.get('jiraUrl')?.trim()
+  if (key && summary && url) {
+    return {
+      task: issueSeedText({ key, summary, url }),
+      sourceRef: { kind: 'jira', key, url },
+    }
+  }
+  return { task: '', sourceRef: { kind: 'compose' } }
+}
 
 /**
  * Isolated multirepo New-task UI — plan-then-parallel across selected projects.
@@ -11,7 +27,10 @@ import { buildSubmitBody, toggleProjectId, type MultiTargetPlanItem } from './ne
 export function NewMultiTargetRoute() {
   const projects = useProjects()
   const navigate = useNavigate()
-  const [task, setTask] = useState('')
+  const [searchParams] = useSearchParams()
+  const seeded = useMemo(() => sourceRefFromSearch(searchParams), [searchParams])
+  const [task, setTask] = useState(seeded.task)
+  const [sourceRef, setSourceRef] = useState<SourceRef>(seeded.sourceRef)
   const [selected, setSelected] = useState<string[]>([])
   const [items, setItems] = useState<MultiTargetPlanItem[] | null>(null)
   const [fallback, setFallback] = useState(false)
@@ -19,20 +38,22 @@ export function NewMultiTargetRoute() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [autonomous, setAutonomous] = useState(true)
+  const [omSpecRefine, setOmSpecRefine] = useState(false)
 
   const registry = projects.data?.projects ?? []
   const canPlan = task.trim().length > 0 && selected.length >= 2
+  const effectiveTask = withOmSpecRefineHint(task, omSpecRefine)
 
   const submitPreview = useMemo(
     () =>
       buildSubmitBody({
-        task,
+        task: effectiveTask,
         selectedProjectIds: selected,
         items: items ?? undefined,
-        sourceRef: { kind: 'compose' },
+        sourceRef,
         autonomous,
       }),
-    [task, selected, items, autonomous],
+    [effectiveTask, selected, items, sourceRef, autonomous],
   )
 
   async function plan() {
@@ -42,7 +63,7 @@ export function NewMultiTargetRoute() {
       const res = await fetch(`${API_PREFIX}/ext/multirepo/multi-target/plan`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ task, projectIds: selected }),
+        body: JSON.stringify({ task: effectiveTask, projectIds: selected }),
       })
       const json = (await res.json()) as {
         items?: MultiTargetPlanItem[]
@@ -64,10 +85,10 @@ export function NewMultiTargetRoute() {
   async function start() {
     setError(null)
     const body = buildSubmitBody({
-      task,
+      task: effectiveTask,
       selectedProjectIds: selected,
       items: items ?? undefined,
-      sourceRef: { kind: 'compose' },
+      sourceRef,
       autonomous,
     })
     if (body.mode !== 'multi-target') {
@@ -105,11 +126,18 @@ export function NewMultiTargetRoute() {
           <Link to="/" className="underline">
             Cockpit
           </Link>{' '}
+          ·{' '}
+          <Link to="/ext/multirepo/board" className="underline">
+            Jira board
+          </Link>{' '}
           · Multirepo
         </p>
         <h1 className="text-2xl font-semibold tracking-tight">New multi-repo task</h1>
         <p className="text-muted-foreground text-sm">
           Describe one feature, pick 2+ services, plan per-repo prompts, then start linked runs.
+          {sourceRef.kind === 'jira' && sourceRef.key
+            ? ` Seeded from ${sourceRef.key}.`
+            : null}
         </p>
       </header>
 
@@ -121,6 +149,12 @@ export function NewMultiTargetRoute() {
           onChange={(e) => {
             setTask(e.target.value)
             setItems(null)
+            if (sourceRef.kind === 'jira') {
+              // Keep the Jira key/url for PR stamping even if the user edits the body.
+              setSourceRef((cur) => cur)
+            } else {
+              setSourceRef({ kind: 'compose' })
+            }
           }}
           placeholder="Feature / acceptance criteria…"
         />
@@ -161,6 +195,18 @@ export function NewMultiTargetRoute() {
           onChange={(e) => setAutonomous(e.target.checked)}
         />
         Autonomous
+      </label>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={omSpecRefine}
+          onChange={(e) => {
+            setOmSpecRefine(e.target.checked)
+            setItems(null)
+          }}
+        />
+        Refine with om-spec-writing hint before plan/start
       </label>
 
       {items ? (
