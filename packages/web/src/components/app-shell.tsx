@@ -1,6 +1,7 @@
 import {
   FolderIcon,
   FolderOpenIcon,
+  LayersIcon,
   MenuIcon,
   PlusIcon,
   SearchIcon,
@@ -374,6 +375,12 @@ function SidebarContent({
             >
               C
             </kbd>
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="shrink-0 px-2.5" title="Multi-repo task">
+          <Link to="/ext/multirepo/new" onClick={onNavigate} aria-label="Multi-repo task">
+            <LayersIcon className="size-[15px]" aria-hidden="true" />
+            <span className="sr-only">Multi-repo</span>
           </Link>
         </Button>
         {singleProject ? null : <AddProjectMenu />}

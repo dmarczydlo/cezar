@@ -5,11 +5,12 @@ import type {
 import type { RunRecord } from '../runs/store.ts';
 import { stepKind, type WorkflowDef } from '../workflows/types.ts';
 
-const ORDER: readonly ProviderId[] = ['claude', 'codex', 'opencode'];
+const ORDER: readonly ProviderId[] = ['claude', 'codex', 'opencode', 'cursor'];
 const LABEL: Record<ProviderId, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   opencode: 'OpenCode',
+  cursor: 'Cursor',
 };
 
 export function providersRequiredByWorkflow(

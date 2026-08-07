@@ -127,6 +127,7 @@ import {
 } from '../workspace/projects.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { mergeWriteWorkspaceUiState, readWorkspaceUiState } from '../workspace/ui-state.ts';
+import { registerMultirepoExt } from '../ext/multirepo/index.ts';
 import { checkoutRepo, type CloneRunner } from './checkout.ts';
 import { ProjectContextError, ProjectContexts, type ProjectContext } from './project-context.ts';
 import { reviewGateEnabled } from '../runs/review-gate.ts';
@@ -531,7 +532,7 @@ const startRunSchema = z
     task: z.string().min(1).max(100_000, 'must be at most 100000 characters'),
     model: z.string().optional(),
     // Agent backend for this task (falls back to config `defaultRunner`).
-    runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    runner: z.enum(['claude', 'codex', 'opencode', 'cursor']).optional(),
     // Agent account for this task (spec 2026-07-29-agent-profiles). Falls back to the project's
     // own selection, then the discovered default. Bounded like a profile id in the workspace
     // schema, so a value this route accepts can never be degraded away by the next load.
@@ -855,7 +856,7 @@ function foldedLength(task: string, stack: Array<{ text: string }>): number {
 const continueSchema = z.object({
   text: z.string().max(100_000, 'must be at most 100000 characters').optional(),
   images: z.array(imageInputSchema).max(4).optional(),
-  runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+  runner: z.enum(['claude', 'codex', 'opencode', 'cursor']).optional(),
   model: z.string().max(200).optional(),
 });
 
@@ -868,7 +869,7 @@ const continueSchema = z.object({
 // absent so it never touches `task`.
 const startTodoSchema = z
   .object({
-    runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    runner: z.enum(['claude', 'codex', 'opencode', 'cursor']).optional(),
     model: z.string().max(200).optional(),
     prompt: z
       .string()
@@ -1774,7 +1775,7 @@ export function createApp(deps: ServerDeps) {
       },
     )
 
-    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: 'provider must be claude, codex, or opencode' }), async (c) => {
+    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: 'provider must be claude, codex, opencode, or cursor' }), async (c) => {
       const body = { data: c.req.valid('json') };
 
       const provider = body.data.provider as ProviderId;
@@ -4980,13 +4981,14 @@ export function createApp(deps: ServerDeps) {
   const modelPresetSchema = z.string().trim().max(200).nullable().optional();
   const setConfigSchema = z.object({
     baseBranch: z.string().trim().min(1).max(200).nullable().optional(),
-    defaultRunner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    defaultRunner: z.enum(['claude', 'codex', 'opencode', 'cursor']).optional(),
     systemPrompt: z.string().trim().max(20_000, 'must be at most 20000 characters').nullable().optional(),
     defaultModels: z
       .object({
         claude: modelPresetSchema,
         codex: modelPresetSchema,
         opencode: modelPresetSchema,
+        cursor: modelPresetSchema,
       })
       .optional(),
     // Concurrency + memory guard (Settings → Resources). maxParallel clamps to
@@ -5112,6 +5114,30 @@ export function createApp(deps: ServerDeps) {
     .route('/', fsBrowseRoutes)
     .route('/', automationChecksRoutes)
     .route('/', workspaceEventsRoutes);
+
+  // Isolated multirepo extension (fork) — keep this call the only upstream hook.
+  registerMultirepoExt({
+    app: workspaceV1,
+    getManager: async (projectId) => {
+      try {
+        const ctx = await contexts.context(projectId);
+        return {
+          startRun: ctx.manager.startRun.bind(ctx.manager),
+          store: ctx.store,
+        };
+      } catch {
+        return undefined;
+      }
+    },
+    resolveProjects: async (projectIds) => {
+      const listed = await listProjects();
+      const byId = new Map(listed.map((p) => [p.id, p]));
+      return projectIds.flatMap((id) => {
+        const hit = byId.get(id);
+        return hit ? [{ id: hit.id, name: hit.name || hit.id }] : [];
+      });
+    },
+  });
 
   // ---- mount ---------------------------------------------------------------
   // Scoped first, then the unscoped alias bound to the boot project. The paths are disjoint (no

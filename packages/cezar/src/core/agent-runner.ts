@@ -14,11 +14,11 @@
 import type { UiEvent } from './ui-events.ts';
 
 /** `claude-cli` is the legacy id kept so old run records still parse. */
-export type AgentBackend = 'claude' | 'codex' | 'opencode' | 'claude-cli';
+export type AgentBackend = 'claude' | 'codex' | 'opencode' | 'claude-cli' | 'cursor';
 
 /** The user-selectable runners (what config/GUI expose). */
-export type RunnerId = 'claude' | 'codex' | 'opencode';
-export const RUNNER_IDS: readonly RunnerId[] = ['claude', 'codex', 'opencode'];
+export type RunnerId = 'claude' | 'codex' | 'opencode' | 'cursor';
+export const RUNNER_IDS: readonly RunnerId[] = ['claude', 'codex', 'opencode', 'cursor'];
 
 export interface AgentRunSpec {
   /** Appended to the CLI's default system prompt (`--append-system-prompt`). */

@@ -1,4 +1,5 @@
-import { ChevronDownIcon, SettingsIcon } from 'lucide-react'
+import { ChevronDownIcon, SettingsIcon, TicketIcon } from 'lucide-react'
+import { Link as RouterLink } from 'react-router'
 import { Link } from '@/lib/project-router'
 
 import type { BackendCheck, HealthResponse } from '@open-mercato/cezar-api-client'
@@ -88,6 +89,16 @@ export function ToolsMenu({ health }: { health: HealthResponse | undefined }) {
           </>
         ) : null}
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <RouterLink
+            to="/settings/global/jira"
+            data-slot="tools-jira"
+            className="gap-2 text-[12.5px] text-muted-foreground"
+          >
+            <TicketIcon className="size-3.5" aria-hidden="true" />
+            Jira board
+          </RouterLink>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link
             to="/settings/agents"

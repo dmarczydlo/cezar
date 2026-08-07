@@ -58,6 +58,11 @@ describe('scopeTo', () => {
     expect(scopeTo('cezar', '/p/other/tasks/x')).toBe('/p/other/tasks/x')
   })
 
+  it('leaves workspace ext routes unscoped', () => {
+    expect(scopeTo('cezar', '/ext/multirepo/new')).toBe('/ext/multirepo/new')
+    expect(scopeTo('cezar', '/ext/multirepo/groups/g1')).toBe('/ext/multirepo/groups/g1')
+  })
+
   it('percent-encodes the project id', () => {
     expect(scopeTo('my proj', '/new')).toBe('/p/my%20proj/new')
   })
