@@ -51,6 +51,10 @@ describe('registerMultirepoExt', () => {
       const listed = (await issues.json()) as { available: boolean; reason?: string };
       expect(listed.available).toBe(false);
       expect(listed.reason).toMatch(/missing env/);
+
+      const cleared = await app.request('/ext/multirepo/board', { method: 'DELETE' });
+      expect(cleared.status).toBe(200);
+      expect(await cleared.json()).toEqual({ configured: false, board: null });
     } finally {
       _setMultirepoHomeForTests(undefined);
       rmSync(home, { recursive: true, force: true });
