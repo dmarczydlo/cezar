@@ -44,6 +44,7 @@ export const RUNNERS: readonly RunnerOption[] = [
   { id: 'claude', label: 'claude', desc: 'Claude Code CLI' },
   { id: 'codex', label: 'codex', desc: 'OpenAI Codex (app-server)' },
   { id: 'opencode', label: 'opencode', desc: 'OpenCode (serve)' },
+  { id: 'cursor', label: 'cursor', desc: 'Cursor Agent CLI' },
 ]
 
 export interface ModelPreset {
@@ -54,7 +55,8 @@ export interface ModelPreset {
 
 /** Static model presets per runner. `id: ''` is always "auto" —
  *  no model flag, the runner decides. Claude takes tier aliases + pinned versions; Codex takes
- *  Codex entries are supplied by host discovery; OpenCode takes `provider/model` ids. */
+ *  Codex entries are supplied by host discovery; OpenCode takes `provider/model` ids.
+ *  Cursor entries beyond auto are supplied by host discovery (`agent models`). */
 export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
   claude: [
     { id: '', label: 'auto', desc: 'Pick the best model per step' },
@@ -76,6 +78,9 @@ export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
     { id: 'openai/gpt-5.1', label: 'gpt-5.1', desc: 'via OpenAI' },
     { id: 'openai/gpt-5.1-codex', label: 'gpt-5.1-codex', desc: 'via OpenAI' },
   ],
+  cursor: [
+    { id: '', label: 'auto', desc: 'Use your Cursor default model' },
+  ],
 }
 
 /** Keep recognized presets from another backend out of a runner's custom-model escape hatch
@@ -89,15 +94,36 @@ export function modelConflictsWithRunner(model: string, runner: Runner): boolean
   )
 }
 
+const DISCOVERED_MODEL_RUNNERS = new Set<Runner>(['codex', 'cursor'])
+
+function isRunnerModelCatalog(
+  value: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
+): value is RunnerModelCatalogResponse {
+  return Array.isArray((value as RunnerModelCatalogResponse).models)
+    && typeof (value as RunnerModelCatalogResponse).runner === 'string'
+    && typeof (value as RunnerModelCatalogResponse).source === 'string'
+}
+
+/** Resolve the catalog row for `runner` from either a single response or a per-runner map. */
+export function catalogForRunner(
+  runner: Runner,
+  catalogs?: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
+): RunnerModelCatalogResponse | undefined {
+  if (!catalogs) return undefined
+  if (isRunnerModelCatalog(catalogs)) return catalogs.runner === runner ? catalogs : undefined
+  return catalogs[runner]
+}
+
 export function modelsForRunner(
   runner: Runner,
-  catalog?: RunnerModelCatalogResponse,
+  catalogs?: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
   customIds: readonly (string | null | undefined)[] = [],
 ): readonly ModelPreset[] {
   const base = [...(MODELS_BY_RUNNER[runner] ?? MODELS_BY_RUNNER.claude)]
   const seen = new Set(base.map((model) => model.id))
-  if (runner === 'codex') {
-    for (const model of catalog?.models ?? []) {
+  const catalog = catalogForRunner(runner, catalogs)
+  if (DISCOVERED_MODEL_RUNNERS.has(runner) && catalog) {
+    for (const model of catalog.models) {
       if (!model.id || seen.has(model.id)) continue
       seen.add(model.id)
       base.push({ id: model.id, label: model.label || model.id, desc: model.description })
@@ -116,12 +142,14 @@ export function modelsForRunner(
 
 export function modelCatalogStatus(
   runner: Runner,
-  catalog: RunnerModelCatalogResponse | undefined,
+  catalogs?: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
   failed = false,
 ): string | undefined {
-  if (runner !== 'codex') return undefined
-  if (catalog?.stale) return 'Using cached Codex model list'
-  if (failed || catalog?.source === 'unavailable') return 'Latest Codex models unavailable'
+  if (!DISCOVERED_MODEL_RUNNERS.has(runner)) return undefined
+  const catalog = catalogForRunner(runner, catalogs)
+  const label = runner === 'codex' ? 'Codex' : 'Cursor'
+  if (catalog?.stale) return `Using cached ${label} model list`
+  if (failed || catalog?.source === 'unavailable') return `Latest ${label} models unavailable`
   return undefined
 }
 
@@ -167,9 +195,9 @@ export function resolveModel(
   picked: string | null,
   runner: Runner,
   defaults?: Partial<Record<Runner, string>>,
-  catalog?: RunnerModelCatalogResponse,
+  catalogs?: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
 ): string {
-  const models = modelsForRunner(runner, catalog, [picked, defaults?.[runner]])
+  const models = modelsForRunner(runner, catalogs, [picked, defaults?.[runner]])
   if (picked !== null && models.some((m) => m.id === picked)) return picked
   const preset = defaults?.[runner]
   if (preset !== undefined && models.some((m) => m.id === preset)) return preset

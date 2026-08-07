@@ -97,7 +97,8 @@ const PROVIDERS_CONNECTED: ProviderStatusResponse = {
     { provider: 'claude', status: 'connected', enabled: true },
     { provider: 'codex', status: 'disconnected', enabled: true },
     { provider: 'opencode', status: 'not-installed', enabled: true },
-  ],
+    { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
 }
 
 const PROVIDERS_MULTI: ProviderStatusResponse = {
@@ -105,7 +106,8 @@ const PROVIDERS_MULTI: ProviderStatusResponse = {
     { provider: 'claude', status: 'connected', enabled: true },
     { provider: 'codex', status: 'connected', enabled: true },
     { provider: 'opencode', status: 'disconnected', enabled: true },
-  ],
+    { provider: 'cursor', status: 'connected', enabled: true },
+        ],
 }
 
 const PROVIDERS_NONE: ProviderStatusResponse = {
@@ -113,7 +115,8 @@ const PROVIDERS_NONE: ProviderStatusResponse = {
     { provider: 'claude', status: 'disconnected', enabled: true },
     { provider: 'codex', status: 'not-installed', enabled: true },
     { provider: 'opencode', status: 'disconnected', enabled: true },
-  ],
+    { provider: 'cursor', status: 'disconnected', enabled: true },
+        ],
 }
 
 const SKILLS: Skill[] = [
@@ -274,7 +277,10 @@ function serve(overrides: {
           ? data.providerStatus()
           : json(data.providerStatus, data.providerStatusStatus)
       }
-      if (url === '/api/v1/models?runner=codex') return json({ runner: 'codex', models: [{ id: 'gpt-future', label: 'gpt-future', description: 'Newest' }], source: 'live', stale: false })
+      if (url.startsWith('/api/v1/models?runner=')) {
+        const runner = url.includes('cursor') ? 'cursor' : 'codex'
+        return json({ runner, models: runner === 'codex' ? [{ id: 'gpt-future', label: 'gpt-future', description: 'Newest' }] : [{ id: 'composer-2.5', label: 'Composer 2.5', description: '' }], source: 'live', stale: false })
+      }
       if (url === '/api/v1/skills') return json(data.skills)
       if (url === '/api/v1/workflows' && method === 'GET') return json(data.workflows)
       if (url === '/api/v1/workflows' && method === 'POST') {
@@ -441,6 +447,7 @@ describe('picker data flows', () => {
           { provider: 'claude', status: 'connected', enabled: false },
           { provider: 'codex', status: 'connected', enabled: true },
           { provider: 'opencode', status: 'connected', enabled: false },
+          { provider: 'cursor', status: 'connected', enabled: true },
         ],
       },
     })
@@ -641,6 +648,7 @@ describe('provider authentication gate', () => {
           { provider: 'claude', status: 'disconnected', enabled: true },
           { provider: 'codex', status: 'connected', enabled: true },
           { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     })
@@ -672,6 +680,7 @@ describe('provider authentication gate', () => {
           { provider: 'claude', status: 'disconnected', enabled: true },
           { provider: 'codex', status: 'connected', enabled: true },
           { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     })
@@ -690,6 +699,7 @@ describe('provider authentication gate', () => {
           { provider: 'claude', status: 'unknown', enabled: true },
           { provider: 'codex', status: 'connected', enabled: true },
           { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     })
@@ -1291,6 +1301,7 @@ describe('bookmarklet auto-start', () => {
           { provider: 'claude', status: 'disconnected', enabled: true },
           { provider: 'codex', status: 'connected', enabled: true },
           { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     })

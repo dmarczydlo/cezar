@@ -4,7 +4,7 @@ import { AGENT_MODELS_LOCKED_ENV } from './agent-model-policy.ts';
 import { profileEnv } from './agent-profiles.ts';
 import { withEnvPrefix } from './shell-env.ts';
 
-export const PROVIDER_IDS = ['claude', 'codex', 'opencode'] as const;
+export const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 export type ProviderConnectionState =
   | 'connected'
@@ -237,7 +237,24 @@ const DESCRIPTORS: readonly ProviderDescriptor[] = [
     installHint: 'Install OpenCode, then run `opencode auth login`.',
     parse: parseOpenCodeStatus,
   },
+  {
+    id: 'cursor',
+    executable: () => process.env.CEZ_CURSOR_AGENT_BIN ?? 'agent',
+    statusArgs: ['--version'],
+    loginArgs: ['login'],
+    installHint:
+      'Install the Cursor CLI (`curl https://cursor.com/install -fsS | bash`), then run `agent login` (or set CURSOR_API_KEY).',
+    parse: parseCursorStatus,
+  },
 ];
+
+function parseCursorStatus(result: ProviderCommandResult): ProviderConnectionState | null {
+  if (result.errorCode === 'ENOENT') return 'not-installed';
+  if (process.env.CURSOR_API_KEY?.trim()) return 'connected';
+  if (result.exitCode === 0) return 'connected';
+  if (result.exitCode === null && result.errorCode) return 'not-installed';
+  return 'disconnected';
+}
 
 function defaultRunProviderCommand(
   executable: string,

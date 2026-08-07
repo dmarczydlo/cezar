@@ -238,6 +238,7 @@ export const runnerModelsSchema = z.object({
   claude: z.string().optional(),
   codex: z.string().optional(),
   opencode: z.string().optional(),
+  cursor: z.string().optional(),
 });
 export type RunnerModels = z.infer<typeof runnerModelsSchema>;
 
@@ -284,6 +285,7 @@ export const setConfigInputSchema = z.object({
       claude: z.string().trim().max(200).nullable().optional(),
       codex: z.string().trim().max(200).nullable().optional(),
       opencode: z.string().trim().max(200).nullable().optional(),
+      cursor: z.string().trim().max(200).nullable().optional(),
     })
     .optional(),
   maxParallel: z.number().int().min(1).max(16).optional(),
@@ -398,7 +400,7 @@ export const runnerModelOptionSchema = z.object({
 });
 export type RunnerModelOption = z.infer<typeof runnerModelOptionSchema>;
 
-/** `GET /api/v1/models?runner=codex` — discovered models, plus how fresh the answer is. Never an
+/** `GET /api/v1/models?runner=codex|cursor` — discovered models, plus how fresh the answer is. Never an
  *  error: an unavailable CLI degrades to `source: 'unavailable'` with a `reason`. */
 export const runnerModelCatalogResponseSchema = z.object({
   runner: runnerSchema,
