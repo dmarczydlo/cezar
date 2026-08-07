@@ -3,17 +3,17 @@
 > Status: approved design (brainstorming)  
 > Date: 2026-08-06  
 > Upstream: [open-mercato/cezar](https://github.com/open-mercato/cezar)  
-> Approach: isolated extension layer (`ext/myne`) — reuse stock `groupId` fan-out + ext-owned Jira board  
-> Amendment: keep all Myne features out of upstream modules so `upstream/main` upgrades stay mergeable
+> Approach: isolated extension layer (`ext/multirepo`) — reuse stock `groupId` fan-out + ext-owned Jira board  
+> Amendment: keep all multirepo extension features out of upstream modules so `upstream/main` upgrades stay mergeable
 
 ## Problem
 
-Cezar already supports a **multi-project workspace** (one cockpit, many git repos). On the Myne VPS (`~/workspace/myne`), services such as `platform-core-service`, `platform-web-admin`, and `customer-api-service` are registered in `~/.cezar/config.json`.
+Cezar already supports a **multi-project workspace** (one cockpit, many git repos). On a microservices VPS workspace (sibling git repos), services such as `platform-core-service`, `platform-web-admin`, and `customer-api-service` are registered in `~/.cezar/config.json`.
 
 What is missing:
 
 1. **Cross-service work as one action** — a feature that spans FE + BE (or 2–3 services) still requires starting unrelated single-repo tasks.
-2. **Jira as a task source** — the cockpit board today is GitHub Issues via `gh` / `ForgeDriver`; Myne work usually starts from a pasted/file spec or a Jira issue, optionally refined with `om-spec-writing`.
+2. **Jira as a task source** — the cockpit board today is GitHub Issues via `gh` / `ForgeDriver`; day-to-day work usually starts from a pasted/file spec or a Jira issue, optionally refined with `om-spec-writing`.
 
 ## Goals
 
@@ -38,7 +38,7 @@ What is missing:
 
 | Existing | Relevance |
 |----------|-----------|
-| Multi-project workspace (`~/.cezar/config.json`) | Already lists all Myne services; tasks remain one `repoRoot` each. |
+| Multi-project workspace (`~/.cezar/config.json`) | Already lists all registered microservices; tasks remain one `repoRoot` each. |
 | Parallel variants (`groupId`, `startVariants`) | Closest fan-out pattern — same repo, competing prompts, pick one winner. |
 | Chain planner (`planner.ts`) | One-repo step planning; extend for multi-target prompt split. |
 | `ForgeDriver` (GitHub) | Per-repo forge for issues/PRs; do not conflate with workspace Jira board. |
@@ -80,25 +80,25 @@ What is missing:
 
 | Piece | Responsibility |
 |-------|----------------|
-| **`ext/myne` server module** | All Myne APIs, planner, starter, Jira client, ext state — isolated from upstream packages. |
-| **Ext board provider** | List/pick Jira issues via REST. Config in `~/.cezar/ext-myne/state.json`. |
+| **`ext/multirepo` server module** | All multirepo extension APIs, planner, starter, Jira client, ext state — isolated from upstream packages. |
+| **Ext board provider** | List/pick Jira issues via REST. Config in `~/.cezar/ext-multirepo/state.json`. |
 | **Cross-project starter** | Calls stock `RunManager.startRun` with shared `groupId` and `variant = projectId`; records members in ext state. |
 | **Multi-target planner** | Spec + selected projects → per-project prompts; fallback if planning fails. |
-| **Ext New-task / Board / Group UI** | Separate routes under `/ext/myne/*` — stock New task unchanged. |
+| **Ext New-task / Board / Group UI** | Separate routes under `/ext/multirepo/*` — stock New task unchanged. |
 | **PR title via run title** | Stamp Jira key onto run `title` through existing store APIs so stock `createDraftPr` picks it up — no forge edits. |
-| **Cursor runner (`ext/myne/cursor`)** | `AgentRunner` over `agent -p --force`; thin core registry hooks only (`RunnerId`, `createRunner`, provider probe, picker). |
+| **Cursor runner (`ext/multirepo/cursor`)** | `AgentRunner` over `agent -p --force`; thin core registry hooks only (`RunnerId`, `createRunner`, provider probe, picker). |
 
 GitHub remains the per-project **forge** (PRs, checks). Jira is an **ext board** only in v1 — not a full `ForgeDriver` replacement.
 
 ### Isolation / upgrade rules
 
-- **Allowed upstream touch points:** one `registerMyneExt(...)` call in `server.ts`; a few route mounts in `routes.tsx`; for Cursor, thin `RunnerId` / provider / `createRunner` / picker catalog hooks.
+- **Allowed upstream touch points:** one `registerMultirepoExt(...)` call in `server.ts`; a few route mounts in `routes.tsx`; for Cursor, thin `RunnerId` / provider / `createRunner` / picker catalog hooks.
 - **Do not modify** for multi-target/Jira: `runs/store.ts`, `workflows/run.ts`, `server/forge/github.ts`, stock `new-task.tsx` (ext UI instead).
 - Periodic upgrade: `git fetch upstream && merge upstream/main` — expect conflicts mainly at those hooks.
 
 ## Data model
 
-### Ext state (`~/.cezar/ext-myne/state.json`)
+### Ext state (`~/.cezar/ext-multirepo/state.json`)
 
 ```json
 {
@@ -153,7 +153,7 @@ GitHub remains the per-project **forge** (PRs, checks). Jira is an **ext board**
 
 1. Fork `open-mercato/cezar` on GitHub.
 2. Remotes: `origin` = fork, `upstream` = `open-mercato/cezar`.
-3. Keep features in `ext/myne` + `routes/ext-myne` with only register-hook touches upstream.
+3. Keep features in `ext/multirepo` + `routes/ext-multirepo` with only register-hook touches upstream.
 4. Periodically: `git fetch upstream` && merge or rebase onto `upstream/main` — expect conflicts mainly at the hook lines.
 
 Do not reshape protected GitHub forge list payloads (`BACKWARD_COMPATIBILITY` surfaces).
@@ -168,7 +168,7 @@ Do not reshape protected GitHub forge list payloads (`BACKWARD_COMPATIBILITY` su
 - Jira board: mocked REST list/map; missing token → unavailable.
 - PR helper: Jira `sourceRef.key` → run title includes `PROJ-123` (stock draft PR uses title).
 
-**Manual (Myne VPS)**
+**Manual (microservices VPS)**
 
 - Ext New task → paste spec → select `platform-core-service` + `platform-web-admin` → Plan → Start → two worktrees/PRs.
 - Jira-sourced task → draft PR titles carry the key.
@@ -199,6 +199,6 @@ Suggested build order:
 | Jira access | REST API from cezar server (ext module) |
 | Board scope | One Jira board in ext workspace state |
 | PR ↔ Jira | Issue key via run title (stock draft PR); no forge edits |
-| Approach | **Isolated `ext/myne` layer** so upstream upgrades stay easy |
+| Approach | **Isolated `ext/multirepo` layer** so upstream upgrades stay easy |
 | Core schema | No `groupKind` / `sourceRef` on `RunRecord` — ext state owns them |
-| Cursor CLI | Fourth runner via `agent` binary; impl in `ext/myne/cursor`, thin core registry hooks |
+| Cursor CLI | Fourth runner via `agent` binary; impl in `ext/multirepo/cursor`, thin core registry hooks |
