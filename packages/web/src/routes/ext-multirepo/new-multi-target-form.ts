@@ -44,3 +44,21 @@ export function buildSubmitBody(input: {
 export function toggleProjectId(selected: string[], id: string): string[] {
   return selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]
 }
+
+/** Optional om-spec-writing refine hint prepended before plan/start. */
+export const OM_SPEC_REFINE_HINT = [
+  'Before implementing, refine this into a clear implementation spec in the style of the om-spec-writing skill:',
+  '- goal, non-goals, acceptance criteria, and out-of-scope',
+  '- concrete file/package touch points per target service when known',
+  '- risks and open questions',
+  '',
+  'Specification:',
+  '',
+].join('\n')
+
+export function withOmSpecRefineHint(task: string, enabled: boolean): string {
+  const trimmed = task.trim()
+  if (!enabled || !trimmed) return task
+  if (task.includes('om-spec-writing')) return task
+  return `${OM_SPEC_REFINE_HINT}${task}`
+}

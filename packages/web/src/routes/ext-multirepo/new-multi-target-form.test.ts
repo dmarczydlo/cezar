@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSubmitBody, toggleProjectId } from './new-multi-target-form'
+import { buildSubmitBody, toggleProjectId, withOmSpecRefineHint } from './new-multi-target-form'
 
 describe('buildSubmitBody', () => {
   it('uses multi-target payload when 2+ projects selected', () => {
@@ -36,5 +36,17 @@ describe('toggleProjectId', () => {
   it('adds and removes ids', () => {
     expect(toggleProjectId(['a'], 'b')).toEqual(['a', 'b'])
     expect(toggleProjectId(['a', 'b'], 'a')).toEqual(['b'])
+  })
+})
+
+describe('withOmSpecRefineHint', () => {
+  it('prepends guidance when enabled', () => {
+    const out = withOmSpecRefineHint('Add login', true)
+    expect(out).toContain('om-spec-writing')
+    expect(out).toContain('Add login')
+  })
+
+  it('leaves text alone when disabled', () => {
+    expect(withOmSpecRefineHint('Add login', false)).toBe('Add login')
   })
 })
