@@ -127,6 +127,7 @@ import {
 } from '../workspace/projects.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { mergeWriteWorkspaceUiState, readWorkspaceUiState } from '../workspace/ui-state.ts';
+import { registerMultirepoExt } from '../ext/multirepo/index.ts';
 import { checkoutRepo, type CloneRunner } from './checkout.ts';
 import { ProjectContextError, ProjectContexts, type ProjectContext } from './project-context.ts';
 import { reviewGateEnabled } from '../runs/review-gate.ts';
@@ -5112,6 +5113,9 @@ export function createApp(deps: ServerDeps) {
     .route('/', fsBrowseRoutes)
     .route('/', automationChecksRoutes)
     .route('/', workspaceEventsRoutes);
+
+  // Isolated multirepo extension (fork) — keep this call the only upstream hook.
+  registerMultirepoExt({ app: workspaceV1 });
 
   // ---- mount ---------------------------------------------------------------
   // Scoped first, then the unscoped alias bound to the boot project. The paths are disjoint (no
