@@ -58,6 +58,8 @@ function scopePathname(projectId: string, pathname: string): string {
   // explicit cross-project links. Both pass through untouched.
   if (!pathname.startsWith('/')) return pathname
   if (pathname === '/p' || pathname.startsWith('/p/')) return pathname
+  // Workspace-level extension routes (ext/multirepo) must not be project-prefixed.
+  if (pathname === '/ext' || pathname.startsWith('/ext/')) return pathname
   return `/p/${encodeURIComponent(projectId)}${pathname}`
 }
 
