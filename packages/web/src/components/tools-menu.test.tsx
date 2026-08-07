@@ -173,6 +173,16 @@ describe('ToolsMenu', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     expect(screen.getByTestId('location').textContent).toBe('/settings/agents')
   })
+
+  it('offers Jira board into global settings (unscoped URL)', async () => {
+    renderMenu(ALL_GOOD)
+    const menu = await openMenu()
+    const jira = within(menu).getByRole('menuitem', { name: /Jira board/ })
+    expect(jira.getAttribute('href')).toBe('/settings/global/jira')
+    fireEvent.click(jira)
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+    expect(screen.getByTestId('location').textContent).toBe('/settings/global/jira')
+  })
 })
 
 /** The env-chips popover is where the spec's degradation table says the missing-GitHub hint

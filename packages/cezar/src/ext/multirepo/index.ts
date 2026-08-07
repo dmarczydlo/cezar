@@ -114,6 +114,13 @@ function buildRoutes(deps: MultirepoExtDeps): Hono {
     return c.json({ configured: true as const, board });
   });
 
+  routes.delete('/ext/multirepo/board', async (c) => {
+    const state = await loadMultirepoState();
+    delete state.board;
+    await saveMultirepoState(state);
+    return c.json({ configured: false as const, board: null });
+  });
+
   routes.get('/ext/multirepo/board/issues', async (c) => {
     const state = await loadMultirepoState();
     if (!state.board) {

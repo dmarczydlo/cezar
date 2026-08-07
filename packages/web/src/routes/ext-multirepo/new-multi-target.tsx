@@ -127,7 +127,7 @@ export function NewMultiTargetRoute() {
             Cockpit
           </Link>{' '}
           ·{' '}
-          <Link to="/ext/multirepo/board" className="underline">
+          <Link to="/settings/global/jira" className="underline">
             Jira board
           </Link>{' '}
           · Multirepo
