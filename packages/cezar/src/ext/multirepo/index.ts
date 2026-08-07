@@ -7,7 +7,13 @@ import {
   startMultiTargetRuns,
   type MultiTargetStartManager,
 } from './multi-target-start.ts';
-import type { MultirepoSourceRef } from './state.ts';
+import { listJiraIssues } from './board/jira.ts';
+import {
+  loadMultirepoState,
+  saveMultirepoState,
+  type MultirepoBoardConfig,
+  type MultirepoSourceRef,
+} from './state.ts';
 
 /**
  * Multirepo extension registration seam.
@@ -23,6 +29,14 @@ const sourceRefSchema = z
     url: z.string().max(2048).optional(),
   })
   .optional();
+
+const boardBodySchema = z.object({
+  kind: z.literal('jira'),
+  baseUrl: z.string().url().max(2048),
+  email: z.string().email().max(320),
+  apiTokenEnv: z.string().min(1).max(200),
+  jql: z.string().min(1).max(4000),
+});
 
 const planBodySchema = z.object({
   task: z.string().min(1).max(100_000),
@@ -71,6 +85,47 @@ function buildRoutes(deps: MultirepoExtDeps): Hono {
   const routes = new Hono();
 
   routes.get('/ext/multirepo/health', (c) => c.json({ ok: true, ext: 'multirepo' }));
+
+  routes.get('/ext/multirepo/board', async (c) => {
+    const state = await loadMultirepoState();
+    if (!state.board) {
+      return c.json({ configured: false as const, board: null });
+    }
+    return c.json({ configured: true as const, board: state.board });
+  });
+
+  routes.put('/ext/multirepo/board', async (c) => {
+    let body: z.infer<typeof boardBodySchema>;
+    try {
+      body = boardBodySchema.parse(await c.req.json());
+    } catch {
+      return c.json({ error: 'invalid body' }, 400);
+    }
+    const state = await loadMultirepoState();
+    const board: MultirepoBoardConfig = {
+      kind: 'jira',
+      baseUrl: body.baseUrl.replace(/\/+$/, ''),
+      email: body.email,
+      apiTokenEnv: body.apiTokenEnv,
+      jql: body.jql,
+    };
+    state.board = board;
+    await saveMultirepoState(state);
+    return c.json({ configured: true as const, board });
+  });
+
+  routes.get('/ext/multirepo/board/issues', async (c) => {
+    const state = await loadMultirepoState();
+    if (!state.board) {
+      return c.json({
+        available: false,
+        reason: 'board not configured',
+        issues: [],
+      });
+    }
+    const result = await listJiraIssues(state.board);
+    return c.json(result);
+  });
 
   routes.post('/ext/multirepo/multi-target/plan', async (c) => {
     let body: z.infer<typeof planBodySchema>;
