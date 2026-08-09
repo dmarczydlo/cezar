@@ -58,8 +58,12 @@ export function buildCursorArgs(input: BuildCursorArgsInput): string[] {
   return args;
 }
 
+/** Path to the bundled mock (`scripts/mock-cursor-agent.mjs`), for CEZ_DRY_RUN=1 — shipped
+ *  alongside `scripts/mock-claude.mjs` so packaged installs can dry-run Cursor too. */
 export function mockCursorAgentPath(): string {
-  return resolvePath(dirname(fileURLToPath(import.meta.url)), '__fixtures__/cursor/mock-agent.mjs');
+  const here = dirname(fileURLToPath(import.meta.url));
+  // here = <pkg>/dist/core (built) or <pkg>/src/core (tsx dev).
+  return resolvePath(here, '..', '..', 'scripts', 'mock-cursor-agent.mjs');
 }
 
 export function resolveCursorBin(optsBin?: string): string {
@@ -130,6 +134,7 @@ export class CursorAgentRunner implements AgentRunner {
     const toolCalls: AgentToolCallRecord[] = [];
     const textChunks: string[] = [];
     let sessionId = spec.sessionId;
+    let tokensUsed = 0;
     let open = true;
     let terminatedByCezar = false;
     let timedOut = false;
@@ -154,6 +159,7 @@ export class CursorAgentRunner implements AgentRunner {
         toolCalls.push({ id: event.id, name: event.tool, input: event.input });
       }
       if (event.type === 'session') sessionId = event.sessionId;
+      if (event.type === 'token-usage') tokensUsed = event.tokensUsed;
       onEvent?.(event);
     };
 
@@ -210,7 +216,7 @@ export class CursorAgentRunner implements AgentRunner {
         const mins = Math.round((limitMs / 60_000) * 10) / 10;
         onEvent?.({ type: 'error', message: `cursor agent timed out after ${mins}m and was killed` });
         onEvent?.({ type: 'done' });
-        return { text, toolCalls, tokensUsed: 0, sessionId };
+        return { text, toolCalls, tokensUsed, sessionId };
       }
 
       if (terminatedByCezar && isSignalTerminationExit(exitCode)) {
@@ -219,7 +225,7 @@ export class CursorAgentRunner implements AgentRunner {
           message: `cursor agent terminated by cezar (code ${exitCode})`,
         });
         onEvent?.({ type: 'done' });
-        return { text, toolCalls, tokensUsed: 0, sessionId };
+        return { text, toolCalls, tokensUsed, sessionId };
       }
 
       if (exitCode !== 0 && exitCode !== null) {
@@ -231,7 +237,7 @@ export class CursorAgentRunner implements AgentRunner {
       }
 
       onEvent?.({ type: 'done' });
-      return { text, toolCalls, tokensUsed: 0, sessionId };
+      return { text, toolCalls, tokensUsed, sessionId };
     })();
 
     child.stderr.on('data', (buf: Buffer) => {

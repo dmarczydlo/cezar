@@ -52,4 +52,15 @@ describe('resumeCommand — session id validation', () => {
       expect(isSafeSessionId(id)).toBe(true);
     }
   });
+
+  it('honours CEZ_CURSOR_AGENT_BIN, matching the binary cursor-agent-runner.ts resolves', () => {
+    const previous = process.env.CEZ_CURSOR_AGENT_BIN;
+    process.env.CEZ_CURSOR_AGENT_BIN = '/opt/cursor/agent';
+    try {
+      expect(resumeCommand('cursor', 'ses_01JABCDEF')).toBe('/opt/cursor/agent --resume ses_01JABCDEF');
+    } finally {
+      if (previous === undefined) delete process.env.CEZ_CURSOR_AGENT_BIN;
+      else process.env.CEZ_CURSOR_AGENT_BIN = previous;
+    }
+  });
 });

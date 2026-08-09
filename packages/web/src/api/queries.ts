@@ -82,6 +82,7 @@ import type {
   ProviderId,
   OpenAgentAccountFileInput,
   ProviderStatusResponse,
+  Runner,
   RunRecord,
   SelectAgentProfileInput,
   SetAgentConfigInput,
@@ -253,10 +254,20 @@ export function useRunnerModels(enabled = true) {
     }),
     [codex?.data, cursor?.data],
   )
+  // Per-runner, so one runner's catalog failure doesn't mark every runner's picker
+  // unavailable — a Cursor fetch error must not tell Codex users their models are gone.
+  const errorsByRunner = useMemo<Partial<Record<Runner, boolean>>>(
+    () => ({
+      ...(codex?.isError ? { codex: true } : {}),
+      ...(cursor?.isError ? { cursor: true } : {}),
+    }),
+    [codex?.isError, cursor?.isError],
+  )
   return {
     data,
     isPending: enabled && results.some((result) => result.isPending),
     isError: results.some((result) => result.isError),
+    errorsByRunner,
     isFetching: results.some((result) => result.isFetching),
     error: results.find((result) => result.error)?.error,
   }

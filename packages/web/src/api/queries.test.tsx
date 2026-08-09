@@ -146,6 +146,23 @@ describe('useRunnerModels', () => {
       '/api/v1/models?runner=cursor',
     ])
   })
+
+  it('reports catalog failure per runner — one runner erroring must not flag the other', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/v1/models?runner=codex') {
+        return json({ runner: 'codex', models: [{ id: 'gpt-future', label: 'Future', description: '' }], source: 'live', stale: false })
+      }
+      if (url === '/api/v1/models?runner=cursor') {
+        return new Response('boom', { status: 500 })
+      }
+      return new Promise<never>(() => {})
+    })
+    const { result } = renderHook(() => useRunnerModels(), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.errorsByRunner.cursor).toBe(true), { timeout: 5000 })
+    expect(result.current.errorsByRunner.codex).toBeUndefined()
+    expect(result.current.data.codex?.models[0]?.id).toBe('gpt-future')
+  })
 })
 
 describe('provider status workspace query', () => {

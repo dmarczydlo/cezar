@@ -257,13 +257,18 @@ async function readCursorIdentity(
     if (fields.every((f) => f.label !== 'Email')) push(fields, 'Email', about.userEmail);
   }
 
-  const authenticated = status?.isAuthenticated === true
-    || status?.status === 'authenticated'
-    || fields.some((f) => f.label === 'Email');
+  // An explicit unauthenticated status takes precedence over `about` supplying display fields
+  // (e.g. a stale cached email) — only the documented CURSOR_API_KEY fallback below may still
+  // report a login in that case.
+  const explicitlyUnauthenticated = status?.isAuthenticated === false || status?.status === 'unauthenticated';
+  const authenticated = !explicitlyUnauthenticated
+    && (status?.isAuthenticated === true
+      || status?.status === 'authenticated'
+      || fields.some((f) => f.label === 'Email'));
   if (!authenticated && process.env.CURSOR_API_KEY?.trim()) {
     return { available: true, fields: [{ label: 'Login', value: 'API key (CURSOR_API_KEY)' }] };
   }
-  if (fields.length === 0) {
+  if (!authenticated) {
     return { available: false, reason: NOT_SIGNED_IN, fields: [] };
   }
   return { available: true, fields };

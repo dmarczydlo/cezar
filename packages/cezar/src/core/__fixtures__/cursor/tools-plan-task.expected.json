@@ -152,7 +152,7 @@
       "diffs": [
         {
           "path": "src/a.ts",
-          "oldText": null,
+          "oldText": "const x = 1",
           "newText": "const x = 2\n",
           "unified": "--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-const x = 1\n+const x = 2\n"
         }

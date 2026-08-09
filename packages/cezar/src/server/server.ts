@@ -5587,7 +5587,7 @@ export function resumeCommand(runner: string | undefined, sessionId: string): st
     case 'opencode':
       return `opencode --session ${sessionId}`;
     case 'cursor':
-      return `agent --resume ${sessionId}`;
+      return `${process.env.CEZ_CURSOR_AGENT_BIN ?? 'agent'} --resume ${sessionId}`;
     default:
       return `claude --resume ${sessionId}`;
   }

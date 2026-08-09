@@ -1,7 +1,7 @@
 /**
  * Golden tests for the Cursor stream-json → v2 mapper.
  * Wire shapes from https://cursor.com/docs/cli/reference/output-format
- * and the dry-run mock `__fixtures__/cursor/mock-agent.mjs`.
+ * and the dry-run mock `scripts/mock-cursor-agent.mjs`.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -12,6 +12,7 @@ import type { UiEvent } from './ui-events.ts';
 import {
   createCursorUiState,
   mapCursorMessage,
+  mapCursorStreamEvent,
   type CursorUiMapping,
 } from './cursor-ui-mapper.ts';
 
@@ -75,5 +76,59 @@ describe('mapCursorMessage edge cases', () => {
       state,
     );
     expect(mapped.events).toEqual([]);
+  });
+
+  it('gives a tool still open when the turn ends a terminal snapshot instead of leaving it running', () => {
+    const started = mapCursorMessage(
+      { type: 'tool_call', subtype: 'started', call_id: 'call_1', tool_call: { shellToolCall: { args: { command: 'npm test' } } } },
+      state,
+    );
+    const result = mapCursorMessage({ type: 'result', subtype: 'success', is_error: true, result: 'interrupted' }, started.state);
+    const snapshot = result.events.find(
+      (e) => e.type === 'item.completed' && e.item.id === 'call_1',
+    );
+    expect(snapshot?.type).toBe('item.completed');
+    expect(snapshot && 'item' in snapshot && 'status' in snapshot.item ? snapshot.item.status : undefined).toBe('failed');
+    expect(result.state.openTools.size).toBe(0);
+  });
+
+  it('emits plan.updated with an empty entries array when a TodoWrite clears the plan', () => {
+    const mapped = mapCursorMessage(
+      {
+        type: 'tool_call',
+        subtype: 'started',
+        call_id: 'call_todo',
+        tool_call: { function: { name: 'TodoWrite', arguments: '{"todos":[]}' } },
+      },
+      state,
+    );
+    expect(mapped.events).toContainEqual({ type: 'plan.updated', entries: [] });
+  });
+});
+
+describe('mapCursorStreamEvent (v1)', () => {
+  it('derives isError from the tool result instead of always reporting success', () => {
+    const events = mapCursorStreamEvent({
+      type: 'tool_call',
+      subtype: 'completed',
+      call_id: 'call_1',
+      tool_call: { shellToolCall: { args: { command: 'npm test' }, result: { error: { errorMessage: 'boom' } } } },
+    });
+    expect(events).toEqual([
+      { type: 'tool-result', toolCallId: 'call_1', result: JSON.stringify({ error: { errorMessage: 'boom' } }), isError: true },
+    ]);
+  });
+
+  it('maps result usage and cost into v1 telemetry events', () => {
+    const events = mapCursorStreamEvent({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'done',
+      usage: { input_tokens: 100, output_tokens: 50 },
+      total_cost_usd: 0.02,
+    });
+    expect(events).toContainEqual({ type: 'token-usage', tokensUsed: 150 });
+    expect(events).toContainEqual({ type: 'cost', usd: 0.02 });
   });
 });

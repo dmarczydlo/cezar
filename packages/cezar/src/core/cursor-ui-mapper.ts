@@ -108,10 +108,6 @@ function mapInit(msg: Record<string, unknown>, state: CursorUiMapperState): Curs
 function mapAssistant(msg: Record<string, unknown>, state: CursorUiMapperState): CursorUiMapping {
   // Skip partial-stream duplicates (docs: timestamp_ms + model_call_id table).
   if ('model_call_id' in msg) return { events: [], state };
-  if (!('timestamp_ms' in msg) && hasOnlyFinalFlushShape(msg)) {
-    // Final flush without timestamp when we already saw text — still keep
-    // non-partial mode (no timestamp_ms / model_call_id) messages.
-  }
 
   const content = messageContent(msg);
   const events: UiEvent[] = [];
@@ -134,10 +130,6 @@ function mapAssistant(msg: Record<string, unknown>, state: CursorUiMapperState):
 
   if (events.length === 0) return { events, state };
   return { events, state: { ...state, itemSeq, sawAssistantText } };
-}
-
-function hasOnlyFinalFlushShape(msg: Record<string, unknown>): boolean {
-  return !('timestamp_ms' in msg) && !('model_call_id' in msg);
 }
 
 function mapToolCall(msg: Record<string, unknown>, state: CursorUiMapperState): CursorUiMapping {
@@ -207,6 +199,13 @@ function mapResult(msg: Record<string, unknown>, state: CursorUiMapperState): Cu
   const events: UiEvent[] = [];
   let itemSeq = state.itemSeq;
   let sawAssistantText = state.sawAssistantText;
+
+  // A tool that never got a `completed` tool_call event before the turn ended
+  // (the turn was interrupted or errored) would otherwise stay "running"
+  // forever in the UI — give it a terminal snapshot now.
+  for (const open of state.openTools.values()) {
+    events.push({ type: 'item.completed', item: { ...open, status: 'failed' } });
+  }
 
   // If no assistant text streamed, surface the terminal result string once.
   if (!sawAssistantText && typeof msg.result === 'string' && msg.result.trim() !== '' && msg.is_error !== true) {
@@ -380,7 +379,15 @@ function completedEditDiffs(parsed: ParsedTool): { diffs: FileDiff[]; locations:
     '';
   if (!path || !isRecord(parsed.result) || !isRecord(parsed.result.success)) return undefined;
   const success = parsed.result.success;
-  const diff: FileDiff = { path, oldText: null };
+  const oldText =
+    key === 'edit'
+      ? typeof parsed.input.old_string === 'string'
+        ? parsed.input.old_string
+        : typeof parsed.input.oldString === 'string'
+          ? parsed.input.oldString
+          : null
+      : null;
+  const diff: FileDiff = { path, oldText };
   if (typeof success.afterFullFileContent === 'string') diff.newText = success.afterFullFileContent;
   else if (typeof success.diffString === 'string') diff.unified = success.diffString;
   else if (typeof parsed.input.fileText === 'string') diff.newText = parsed.input.fileText;
@@ -437,7 +444,7 @@ function planEntries(input: unknown): PlanEntry[] | undefined {
     if (typeof todo.activeForm === 'string') entry.activeForm = todo.activeForm;
     entries.push(entry);
   }
-  return entries.length > 0 ? entries : undefined;
+  return entries;
 }
 
 // ---- shared helpers ---------------------------------------------------------
@@ -512,12 +519,13 @@ export function mapCursorStreamEvent(raw: unknown): AgentEvent[] {
         ];
       }
       if (raw.subtype === 'completed') {
+        const parsed = parseCursorToolCall(raw.tool_call);
         return [
           {
             type: 'tool-result',
             toolCallId: callId,
-            result: JSON.stringify(raw.tool_call ?? {}),
-            isError: false,
+            result: JSON.stringify(parsed.result ?? {}),
+            isError: toolFailed(parsed),
           },
         ];
       }
@@ -528,6 +536,11 @@ export function mapCursorStreamEvent(raw: unknown): AgentEvent[] {
       const events: AgentEvent[] = [];
       if (typeof raw.session_id === 'string') {
         events.push({ type: 'session', sessionId: raw.session_id });
+      }
+      const usage = tokenUsage(raw);
+      if (usage) events.push({ type: 'token-usage', tokensUsed: usage.total });
+      if (typeof raw.total_cost_usd === 'number' && raw.total_cost_usd > 0) {
+        events.push({ type: 'cost', usd: raw.total_cost_usd });
       }
       if (raw.is_error === true) {
         const msg =

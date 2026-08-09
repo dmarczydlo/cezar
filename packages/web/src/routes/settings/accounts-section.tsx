@@ -435,8 +435,8 @@ function DefaultsForNewProjects({ profiles }: { profiles: AgentProfilesResponse 
                   {model.id === '' ? 'auto (default)' : model.label}
                 </option>
               ))}
-              {modelCatalogStatus(entry.id, catalog.data, catalog.isError) ? (
-                <option disabled>{modelCatalogStatus(entry.id, catalog.data, catalog.isError)}</option>
+              {modelCatalogStatus(entry.id, catalog.data, catalog.errorsByRunner[entry.id]) ? (
+                <option disabled>{modelCatalogStatus(entry.id, catalog.data, catalog.errorsByRunner[entry.id])}</option>
               ) : null}
             </select>
           </label>

@@ -507,7 +507,7 @@ cezar is not married to one vendor. Every agent step runs through a single
 > (it ignores `allowedTools`). Treat it as a preview and expect rough edges.
 
 On startup cezar probes which CLIs are installed and the cockpit only offers
-the backends it found — install any one of the three and you're operational.
+the backends it found — install any one of the four and you're operational.
 
 **Pick a backend at three levels** (most specific wins):
 

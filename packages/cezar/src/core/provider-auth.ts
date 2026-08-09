@@ -265,8 +265,10 @@ function parseCursorStatus(result: ProviderCommandResult): ProviderConnectionSta
   }
   // API-key auth never needs `agent login`; honour it when the JSON probe is inconclusive.
   if (process.env.CURSOR_API_KEY?.trim()) return 'connected';
-  if (result.exitCode === 0) return 'disconnected';
-  return 'disconnected';
+  // Malformed or unrecognized JSON is inconclusive, not a confirmed unauthenticated state —
+  // return null so probe() reports 'unknown' instead of telling the user to reconnect an
+  // account that was never actually checked.
+  return null;
 }
 
 function defaultRunProviderCommand(

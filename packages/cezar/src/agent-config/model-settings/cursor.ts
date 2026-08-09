@@ -9,6 +9,9 @@ import type { AgentModelSettingsStrategy } from './types.ts';
 export const cursorModelSettingsStrategy: AgentModelSettingsStrategy = {
   runner: 'cursor',
   async read(repoRoot, env) {
-    return { model: firstConfiguredModel(await readNativeSettingsFiles('cursor', repoRoot, env)) };
+    const model = firstConfiguredModel(await readNativeSettingsFiles('cursor', repoRoot, env));
+    // Cursor stores "Auto" as the literal string `auto`, which means "no --model flag" — the
+    // same sentinel cursor-model-catalog.ts filters out of the picker list.
+    return { model: model === 'auto' ? undefined : model };
   },
 };

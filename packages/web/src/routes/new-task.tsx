@@ -654,7 +654,7 @@ export function NewTaskRoute() {
                 }
                 onPick={(next) => update({ model: next })}
                 options={models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-                status={modelCatalogStatus(displayRunner, catalog.data, catalog.isError)}
+                status={modelCatalogStatus(displayRunner, catalog.data, catalog.errorsByRunner[displayRunner])}
               />
               <PickerPill
                 slot="variants-pill"
