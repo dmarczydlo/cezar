@@ -533,10 +533,14 @@ export function mapCursorStreamEvent(raw: unknown): AgentEvent[] {
     }
 
     if (type === 'result') {
+      // `session` and `done` are owned by the runner (init emits session once; the runner's
+      // own post-loop logic emits exactly one terminal `done`) — emitting them here too
+      // produced duplicate events in the append-only run log.
       const events: AgentEvent[] = [];
-      if (typeof raw.session_id === 'string') {
-        events.push({ type: 'session', sessionId: raw.session_id });
-      }
+      // Cursor's documented terminal `result` shape is
+      // {type, subtype, is_error, duration_ms, duration_api_ms, result, session_id, request_id}
+      // — no `usage`/`total_cost_usd` field today. Kept defensive per the docs' own "field
+      // additions may occur… backward-compatible" note; harmless no-op against real output.
       const usage = tokenUsage(raw);
       if (usage) events.push({ type: 'token-usage', tokensUsed: usage.total });
       if (typeof raw.total_cost_usd === 'number' && raw.total_cost_usd > 0) {
@@ -549,7 +553,7 @@ export function mapCursorStreamEvent(raw: unknown): AgentEvent[] {
             : 'Cursor agent reported an error';
         events.push({ type: 'error', message: msg });
       }
-      events.push({ type: 'done' });
+      events.push({ type: 'turn-end' });
       return events;
     }
 

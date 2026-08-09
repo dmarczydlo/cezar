@@ -44,8 +44,12 @@ function hasToolStatus(events: UiEvent[], status: string): boolean {
 }
 
 /** The parity matrix (spec §"Backend parity requirement"): capability →
- *  predicate over a backend's full v2 fixture output. */
-const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) => boolean]> = [
+ *  predicate over a backend's full v2 fixture output, plus the backends known NOT to
+ *  reach that cell (documented gap, not a bug) — same precedent as the sub-agent
+ *  NESTING exclusion below. */
+const CAPABILITIES: ReadonlyArray<
+  [name: string, produced: (events: UiEvent[]) => boolean, except?: ReadonlyArray<(typeof BACKENDS)[number]>]
+> = [
   [
     'plan.updated with entries (TodoWrite / todoList / todowrite)',
     (events) => events.some((e) => e.type === 'plan.updated' && e.entries.length > 0),
@@ -58,6 +62,9 @@ const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) =
   [
     'reasoning items (thinking / reasoning items / reasoning parts)',
     (events) => items(events).some((item) => item.kind === 'reasoning' && item.text.trim() !== ''),
+    // Cursor's docs are explicit: "`thinking` events are suppressed in print mode and will
+    // not appear in any output format" (cursor.com/docs/cli/reference/output-format).
+    ['cursor'],
   ],
   [
     'structured diffs (Edit input / fileChange.changes / patch parts)',
@@ -70,6 +77,9 @@ const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) =
   [
     'usage.updated with raw token counts',
     (events) => events.some((e) => e.type === 'usage.updated' && e.usage.total > 0),
+    // Cursor's documented terminal `result` frame has no `usage` field — only
+    // {type, subtype, is_error, duration_ms, duration_api_ms, result, session_id, request_id}.
+    ['cursor'],
   ],
   [
     'turn.completed with per-turn directional usage',
@@ -77,6 +87,7 @@ const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) =
       events.some(
         (e) => e.type === 'turn.completed' && (e.usage?.input ?? 0) > 0 && (e.usage?.output ?? 0) > 0,
       ),
+    ['cursor'],
   ],
   ['turn.completed with a stopReason', (events) => events.some((e) => e.type === 'turn.completed' && e.stopReason !== undefined)],
 ] as const;
@@ -84,7 +95,8 @@ const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) =
 describe('protocol v2 backend parity (all first-class mappers emit every matrix capability)', () => {
   for (const backend of BACKENDS) {
     const events = fixtureEvents(backend);
-    for (const [name, produced] of CAPABILITIES) {
+    for (const [name, produced, except] of CAPABILITIES) {
+      if (except?.includes(backend)) continue;
       it(`${backend} produces ${name}`, () => {
         expect(produced(events)).toBe(true);
       });

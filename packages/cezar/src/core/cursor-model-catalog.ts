@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { resolveCursorAgentBin } from './cursor-agent-runner.ts';
 import type { ModelOption } from './runner-model-catalog.ts';
 
 const exec = promisify(execFile);
@@ -14,12 +15,6 @@ export interface CursorModelDiscoveryOptions {
 
 const DEFAULT_DISCOVERY_TIMEOUT_MS = 15_000;
 const MAX_MODELS = 500;
-
-export function resolveCursorModelsBin(bin?: string): string {
-  if (bin?.trim()) return bin.trim();
-  if (process.env.CEZ_CURSOR_AGENT_BIN?.trim()) return process.env.CEZ_CURSOR_AGENT_BIN.trim();
-  return 'agent';
-}
 
 /**
  * Parse `agent models` / `agent --list-models` text.
@@ -50,7 +45,7 @@ export function parseCursorModelsOutput(text: string): ModelOption[] {
 export async function discoverCursorModels(
   options: CursorModelDiscoveryOptions = {},
 ): Promise<ModelOption[]> {
-  const bin = resolveCursorModelsBin(options.bin);
+  const bin = resolveCursorAgentBin(options.bin);
   const timeoutMs = options.timeoutMs ?? DEFAULT_DISCOVERY_TIMEOUT_MS;
   const env = options.env ?? process.env;
   const run =

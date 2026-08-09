@@ -260,18 +260,18 @@ Each backend has a mapper (`packages/cezar/src/core/<backend>-ui-mapper.ts`) tur
 transport into `UiEvent`s. The authoritative table is
 `agent-event-protocols.md` §7.1; the load-bearing rows:
 
-| v2 event / field | claude (stream-json) | codex (app-server JSON-RPC) | opencode (serve HTTP+SSE) |
-|---|---|---|---|
-| `session.started` | `system/init` (model, tools, cwd) | `thread/started` / `thread/start` result | `POST /session` response |
-| `turn.started` | each stdin user message | `turn/started` | each prompt POST |
-| `turn.completed` + `stopReason` | `result` subtype (`success→end_turn`, `error_max_turns→max_tokens`, `error_during_execution→error`) | `turn/completed→end_turn`, `turn/failed→error`, interrupt→`cancelled` | `session.idle→end_turn` (or `error` if a `session.error` preceded) |
-| message item | `assistant` `text` blocks (deltas via `--include-partial-messages`) | `agentMessage` items | text parts |
-| reasoning item | `thinking` blocks | `reasoning` items (+ `textDelta`) | `reasoning` parts |
-| tool item | `tool_use`→running, `tool_result`→completed/failed, `permission_denials`→`declined` | `commandExecution`→execute (+`exitCode`, `outputDelta`), `fileChange`→edit (`diffs`), `mcpToolCall`→other, `webSearch`→fetch, collaboration spawn→task | tool parts (state `pending/running/completed/error→failed`, `patch` parts→`diffs`) |
-| `item.delta` `output` (live terminal) | *(none — card fills on completion; per-capability degradation)* | `item/commandExecution/outputDelta` | running-state metadata |
-| `plan.updated` | `TodoWrite` input | `todoList` / `plan` items | `todowrite` tool |
-| subagent nesting (`parentItemId`) | `parent_tool_use_id` | collaboration receiver thread id (review mode remains childless) | child-session parts under a `subtask` |
-| `usage.updated` | `result.usage` + `total_cost_usd` | `thread/tokenUsage/updated` (no USD) | `message.updated` tokens/cost + `step-finish` |
+| v2 event / field | claude (stream-json) | codex (app-server JSON-RPC) | opencode (serve HTTP+SSE) | cursor (stream-json print mode) |
+|---|---|---|---|---|
+| `session.started` | `system/init` (model, tools, cwd) | `thread/started` / `thread/start` result | `POST /session` response | `system/init` (model, cwd) |
+| `turn.started` | each stdin user message | `turn/started` | each prompt POST | no stdin turn boundary in print mode — starts `turn_1` with the session |
+| `turn.completed` + `stopReason` | `result` subtype (`success→end_turn`, `error_max_turns→max_tokens`, `error_during_execution→error`) | `turn/completed→end_turn`, `turn/failed→error`, interrupt→`cancelled` | `session.idle→end_turn` (or `error` if a `session.error` preceded) | `result` (`is_error→error`, `subtype=error_max_turns→max_tokens`, else `end_turn`) |
+| message item | `assistant` `text` blocks (deltas via `--include-partial-messages`) | `agentMessage` items | text parts | `assistant` `text` content blocks |
+| reasoning item | `thinking` blocks | `reasoning` items (+ `textDelta`) | `reasoning` parts | *(none — docs: `thinking` events are suppressed in print mode)* |
+| tool item | `tool_use`→running, `tool_result`→completed/failed, `permission_denials`→`declined` | `commandExecution`→execute (+`exitCode`, `outputDelta`), `fileChange`→edit (`diffs`), `mcpToolCall`→other, `webSearch`→fetch, collaboration spawn→task | tool parts (state `pending/running/completed/error→failed`, `patch` parts→`diffs`) | `tool_call` started/completed (`readToolCall`/`writeToolCall`/`editToolCall`/`shellToolCall`, or the generic `tool_call.function` wrapper) |
+| `item.delta` `output` (live terminal) | *(none — card fills on completion; per-capability degradation)* | `item/commandExecution/outputDelta` | running-state metadata | *(none)* |
+| `plan.updated` | `TodoWrite` input | `todoList` / `plan` items | `todowrite` tool | `TodoWrite` via `tool_call.function` — **tool name/shape not confirmed against a live CLI transcript** (#807) |
+| subagent nesting (`parentItemId`) | `parent_tool_use_id` | collaboration receiver thread id (review mode remains childless) | child-session parts under a `subtask` | *(none — print-mode wire has no parent attribution; the task-kind tool item is the matrix cell)* |
+| `usage.updated` | `result.usage` + `total_cost_usd` | `thread/tokenUsage/updated` (no USD) | `message.updated` tokens/cost + `step-finish` | *(none — the documented terminal `result` frame carries no `usage`/`total_cost_usd` field)* |
 
 **Mapper robustness contract.** Inputs come off the wire and may be `null`,
 partial or malformed. A mapper **must never throw**: unparseable NDJSON lines are

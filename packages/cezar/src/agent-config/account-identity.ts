@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { resolveCursorAgentBin } from '../core/cursor-agent-runner.ts';
 import type { ProviderId } from '../core/provider-auth.ts';
 import { claudeStateFilePath } from '../paths.ts';
 
@@ -182,7 +183,7 @@ async function defaultRunCursorCommand(
   args: readonly string[],
   env: Record<string, string>,
 ): Promise<{ stdout: string; stderr: string; exitCode: number | null; errorCode?: string }> {
-  const executable = process.env.CEZ_CURSOR_AGENT_BIN ?? 'agent';
+  const executable = resolveCursorAgentBin();
   return new Promise((resolve) => {
     execFile(
       executable,

@@ -58,11 +58,14 @@ describe('resolveModelIdentity — empty / auto', () => {
     }
   });
 
-  it('is undefined for the literal label "auto" on every backend', () => {
-    for (const backend of Object.keys(BACKEND_MODEL_MAP) as AgentBackend[]) {
-      expect(resolveModelIdentity(backend, 'auto')).toBeUndefined();
-      expect(resolveModelIdentity(backend, 'Auto')).toBeUndefined();
-    }
+  it('is undefined for the literal label "auto" on cursor only — its own settings sentinel', () => {
+    expect(resolveModelIdentity('cursor', 'auto')).toBeUndefined();
+    expect(resolveModelIdentity('cursor', 'Auto')).toBeUndefined();
+  });
+
+  it('does not swallow a model literally named "auto" on another backend', () => {
+    // claude has a default provider, so a bare id resolves rather than throwing.
+    expect(resolveModelIdentity('claude', 'auto')).toEqual({ provider: 'anthropic', model: 'auto' });
   });
 });
 

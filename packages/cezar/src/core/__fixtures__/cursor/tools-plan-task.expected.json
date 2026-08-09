@@ -13,24 +13,8 @@
   {
     "type": "item.started",
     "item": {
-      "kind": "reasoning",
-      "id": "item_1",
-      "text": "Plan the edit, then run a failing command to show the error path."
-    }
-  },
-  {
-    "type": "item.completed",
-    "item": {
-      "kind": "reasoning",
-      "id": "item_1",
-      "text": "Plan the edit, then run a failing command to show the error path."
-    }
-  },
-  {
-    "type": "item.started",
-    "item": {
       "kind": "message",
-      "id": "item_2",
+      "id": "item_1",
       "role": "assistant",
       "text": "Updating the plan and applying the fix."
     }
@@ -39,7 +23,7 @@
     "type": "item.completed",
     "item": {
       "kind": "message",
-      "id": "item_2",
+      "id": "item_1",
       "role": "assistant",
       "text": "Updating the plan and applying the fix."
     }
@@ -243,23 +227,6 @@
   {
     "type": "turn.completed",
     "turnId": "turn_1",
-    "stopReason": "end_turn",
-    "usage": {
-      "input": 2200,
-      "output": 340,
-      "total": 6540,
-      "cacheRead": 4000
-    },
-    "costUsd": 0.0042
-  },
-  {
-    "type": "usage.updated",
-    "usage": {
-      "input": 2200,
-      "output": 340,
-      "total": 6540,
-      "cacheRead": 4000
-    },
-    "costUsd": 0.0042
+    "stopReason": "end_turn"
   }
 ]

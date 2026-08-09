@@ -2,6 +2,16 @@
  * Golden tests for the Cursor stream-json → v2 mapper.
  * Wire shapes from https://cursor.com/docs/cli/reference/output-format
  * and the dry-run mock `scripts/mock-cursor-agent.mjs`.
+ *
+ * Provenance (#807 review): verified against that page — the terminal `result` frame is
+ * exactly `{type, subtype, is_error, duration_ms, duration_api_ms, result, session_id,
+ * request_id}` (no `usage`/`total_cost_usd`); `thinking` events are documented as suppressed
+ * in print mode and never appear in any output format; `readToolCall`/`writeToolCall` and the
+ * generic `tool_call.function` wrapper for "other tools" are documented. NOT verified against
+ * that page: the `editToolCall`/`shellToolCall` wrapper names, and the `TodoWrite`/`Task` tool
+ * names and their argument shapes under `tool_call.function` — no live `agent` CLI was
+ * available to capture a real transcript. Treat those specific shapes as best-effort until
+ * confirmed against a real transcript (see AGENT_PROTOCOL.md §7's wire-faithful fixture rule).
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

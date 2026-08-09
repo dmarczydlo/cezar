@@ -42,7 +42,6 @@ export interface CursorAgentRunnerOptions {
 
 export type BuildCursorArgsInput = {
   userPrompt: string;
-  cwd: string;
   systemPrompt?: string;
   model?: string;
 };
@@ -66,11 +65,32 @@ export function mockCursorAgentPath(): string {
   return resolvePath(here, '..', '..', 'scripts', 'mock-cursor-agent.mjs');
 }
 
+/** The real Cursor binary name — `CEZ_CURSOR_AGENT_BIN` override, else `agent` on PATH. Shared
+ *  by every call site that shells out to the real CLI (identity, model discovery, detection),
+ *  so an operator's override is honored consistently instead of four separate `?? 'agent'`s. */
+export function resolveCursorAgentBin(optsBin?: string): string {
+  return optsBin || process.env.CEZ_CURSOR_AGENT_BIN || 'agent';
+}
+
+/** Like {@link resolveCursorAgentBin}, but under `CEZ_DRY_RUN=1` substitutes the bundled mock —
+ *  only for actually spawning a run turn. The mock does not implement `status`/`about`/`models`
+ *  subcommands, so identity and model-discovery call sites use {@link resolveCursorAgentBin}
+ *  directly and keep talking to the real binary (or failing closed) even under dry-run. */
 export function resolveCursorBin(optsBin?: string): string {
   if (optsBin) return optsBin;
   if (process.env.CEZ_CURSOR_AGENT_BIN) return process.env.CEZ_CURSOR_AGENT_BIN;
   if (process.env.CEZ_DRY_RUN === '1') return mockCursorAgentPath();
   return 'agent';
+}
+
+function wrapSpawnError(err: unknown, bin: string): Error {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  if (code === 'ENOENT') {
+    return new Error(
+      `\`${bin}\` not found on PATH — install the Cursor CLI (curl https://cursor.com/install -fsS | bash) and run \`agent login\` (or set CEZ_CURSOR_AGENT_BIN)`,
+    );
+  }
+  return err instanceof Error ? err : new Error(String(err));
 }
 
 function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
@@ -110,7 +130,6 @@ export class CursorAgentRunner implements AgentRunner {
   ): AgentSession {
     const args = buildCursorArgs({
       userPrompt: spec.userPrompt,
-      cwd: spec.cwd,
       systemPrompt: spec.systemPrompt,
       model: spec.model,
     });
@@ -131,6 +150,14 @@ export class CursorAgentRunner implements AgentRunner {
       throw new Error(`failed to spawn Cursor agent (${this.bin}): ${message}`);
     }
 
+    // `spawn` reports a missing/unresolvable binary asynchronously via 'error' (process.nextTick),
+    // not by throwing — an unhandled 'error' event crashes the whole cezar process. This listener
+    // must be attached synchronously, before any await, same as claude-cli-runner.ts.
+    let spawnFailed: Error | null = null;
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      spawnFailed = wrapSpawnError(err, this.bin);
+    });
+
     const toolCalls: AgentToolCallRecord[] = [];
     const textChunks: string[] = [];
     let sessionId = spec.sessionId;
@@ -138,6 +165,9 @@ export class CursorAgentRunner implements AgentRunner {
     let open = true;
     let terminatedByCezar = false;
     let timedOut = false;
+    // A `result` frame with `is_error: true` can still exit 0 — the stream is the source of
+    // truth for whether the turn failed, not the process exit code.
+    let resultError: string | undefined;
     const stderrChunks: string[] = [];
 
     let uiState = createCursorUiState({ fallbackSessionId: spec.sessionId });
@@ -160,6 +190,7 @@ export class CursorAgentRunner implements AgentRunner {
       }
       if (event.type === 'session') sessionId = event.sessionId;
       if (event.type === 'token-usage') tokensUsed = event.tokensUsed;
+      if (event.type === 'error') resultError = event.message;
       onEvent?.(event);
     };
 
@@ -212,6 +243,8 @@ export class CursorAgentRunner implements AgentRunner {
       const exitCode = await waitForExit(child);
       const text = textChunks.join('').trim();
 
+      if (spawnFailed) throw spawnFailed;
+
       if (timedOut) {
         const mins = Math.round((limitMs / 60_000) * 10) / 10;
         onEvent?.({ type: 'error', message: `cursor agent timed out after ${mins}m and was killed` });
@@ -235,6 +268,10 @@ export class CursorAgentRunner implements AgentRunner {
         onEvent?.({ type: 'error', message: msg });
         throw new Error(msg);
       }
+
+      // A `result` frame reporting `is_error: true` while the process still exits 0 — the
+      // stream already emitted its own `error` event; do not also report success.
+      if (resultError) throw new Error(resultError);
 
       onEvent?.({ type: 'done' });
       return { text, toolCalls, tokensUsed, sessionId };

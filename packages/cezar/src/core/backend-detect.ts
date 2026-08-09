@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { resolveCursorAgentBin } from './cursor-agent-runner.ts';
 
 const exec = promisify(execFile);
 
@@ -106,7 +107,7 @@ async function probeCursor(): Promise<BackendCheck> {
   if (process.env.CEZ_DRY_RUN === '1') {
     return { name: 'cursor', available: true, version: 'mock (CEZ_DRY_RUN=1)' };
   }
-  const bin = process.env.CEZ_CURSOR_AGENT_BIN ?? 'agent';
+  const bin = resolveCursorAgentBin();
   try {
     const { stdout } = await exec(bin, ['--version'], { timeout: 10_000 });
     return {
