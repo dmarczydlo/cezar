@@ -539,7 +539,7 @@ describe('ProviderAuthService', () => {
       await service.status();
       now += 9 * 60_000;
       await service.status();
-      // Still three: one probe per provider, from the first call only.
+      // Still four: one probe per provider, from the first call only.
       expect(runCommand).toHaveBeenCalledTimes(4);
     });
 
@@ -858,7 +858,7 @@ describe('ProviderAuthService', () => {
       .toBe('"C:\\Program Files\\op^%en^&co^!de^".exe" auth login');
   });
 
-  it('reports all three providers connected in CEZ_DRY_RUN without executing a command', async () => {
+  it('reports all four providers connected in CEZ_DRY_RUN without executing a command', async () => {
     process.env.CEZ_DRY_RUN = '1';
     const runCommand = runner();
     const service = new ProviderAuthService({ runCommand });

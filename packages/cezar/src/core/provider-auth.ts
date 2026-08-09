@@ -249,8 +249,8 @@ const DESCRIPTORS: readonly ProviderDescriptor[] = [
 ];
 
 function parseCursorStatus(result: ProviderCommandResult): ProviderConnectionState | null {
-  if (result.errorCode === 'ENOENT') return 'not-installed';
-  if (result.exitCode === null && result.errorCode) return 'not-installed';
+  // probe() already handles ENOENT / any other errorCode before calling parse() — result here
+  // always ran successfully at the process level.
   try {
     const parsed: unknown = JSON.parse(result.stdout);
     if (parsed && typeof parsed === 'object') {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** The three agent backends a run can be dispatched to. */
+/** The four agent backends a run can be dispatched to. */
 export const runnerSchema = z.enum(['claude', 'codex', 'opencode', 'cursor']);
 export type Runner = z.infer<typeof runnerSchema>;
 
