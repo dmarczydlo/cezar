@@ -46,6 +46,8 @@ export function resumeCommand(runner: Runner | undefined, sessionId: string): st
       return `codex resume ${sessionId}`
     case 'opencode':
       return `opencode --session ${sessionId}`
+    case 'cursor':
+      return `agent --resume ${sessionId}`
     default:
       return `claude --resume ${sessionId}`
   }
