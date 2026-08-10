@@ -4,9 +4,14 @@
  * Wire shapes: https://cursor.com/docs/cli/reference/output-format
  * (`system/init`, `assistant`, `tool_call` started/completed, `result`).
  *
- * Print mode suppresses dedicated `thinking` events; reasoning parity uses
- * Anthropic-style `thinking` content blocks when present (substitute cell).
- * Optional `usage` on `result` is accepted (docs allow additive fields).
+ * Per the docs above, `thinking` events are suppressed in print mode and the
+ * terminal `result` frame carries no `usage`/`total_cost_usd` — reasoning and
+ * usage.updated/turn.completed-usage are therefore documented `except`
+ * exclusions in `ui-parity.test.ts` (AGENT_PROTOCOL.md §6), not capabilities
+ * this mapper produces. The `usage`/`total_cost_usd` reads below are kept as a
+ * defensive no-op against real output, per the docs' own "field additions may
+ * occur… backward-compatible" note — see `cursor-ui-mapper.test.ts`'s header
+ * for the full verified-vs-unverified provenance split.
  *
  * Never throws on malformed input. State is immutable — callers thread the
  * returned `state` into the next call.

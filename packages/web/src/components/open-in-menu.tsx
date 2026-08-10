@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-import type { OpenTarget, Runner } from '@open-mercato/cezar-api-client'
+import { runnerSchema, type OpenTarget, type Runner } from '@open-mercato/cezar-api-client'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -83,11 +83,15 @@ export function openInIcon(target: OpenTarget): LucideIcon {
   return (target.icon && OPEN_IN_ICONS[target.icon]) || ExternalLinkIcon
 }
 
+// Built from the shared Runner union's runtime values, not restated by hand — a hand-written
+// list here is exactly what let the cursor gap in this function go unnoticed (#807).
+const CLI_TARGET_RUNNER_RE = new RegExp(`^cli:(${runnerSchema.options.join('|')})$`)
+
 /** The runner a `cli:<runner>` Open-in target hands off to, or undefined for every other
  *  target (editors, Finder, terminal) — mirrors the server's `agentCliRunner` (open-in-app.ts)
  *  without importing server code into the bundle. */
 export function cliTargetRunner(targetId: string): Runner | undefined {
-  const match = /^cli:(claude|codex|opencode|cursor)$/.exec(targetId)
+  const match = CLI_TARGET_RUNNER_RE.exec(targetId)
   return match ? (match[1] as Runner) : undefined
 }
 

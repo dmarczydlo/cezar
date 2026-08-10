@@ -300,8 +300,10 @@ heuristic subtitle. `mcp__server__tool` names collapse to `server.tool`.
 
 ## 6. Backend parity — the hard rule (`packages/cezar/src/core/ui-parity.test.ts`)
 
-> Every capability in the parity matrix MUST be emitted by **all three**
-> backends, so the GUI degrades **per-capability, never per-backend**.
+> Every capability in the parity matrix MUST be emitted by **every first-class
+> backend**, so the GUI degrades **per-capability, never per-backend** — unless
+> the backend's own wire format provably cannot carry that capability, in which
+> case the exclusion is written down and cited (see below).
 
 This is made executable: `ui-parity.test.ts` asserts each capability over each
 backend's golden-fixture expected output. If a mapper change drops a capability —
@@ -318,10 +320,22 @@ or a new fixture set forgets one — a named row fails. The matrix:
   `.ai/specs/2026-07-20-grouped-subagent-display.md`, #474)
 - `usage.updated` with raw token counts
 - `turn.completed` with a `stopReason`
-- sub-agent **nesting** via `parentItemId` (all three backends; Codex uses
-  collaboration receiver thread ids when child notifications are subscribed)
+- sub-agent **nesting** via `parentItemId` — only where the wire attributes work
+  to its parent (claude's `parent_tool_use_id`, opencode's child-session parts
+  under a `subtask`); codex and cursor have no parent attribution in their wire
+  format, so their matrix cell is the task-kind tool items above instead
 
-A new backend is not "done" until it produces every row.
+A new backend is not "done" until it produces every row its wire format is
+capable of. **Documented exceptions are allowed** when a capability provably
+cannot be produced from the backend's own wire format — never for "not
+implemented yet". An exception must: (1) cite the upstream source proving the
+capability is absent (a vendor doc quote, or an honest "no live CLI available to
+verify" when that citation cannot be obtained), (2) exclude only that backend
+from that one row via `ui-parity.test.ts`'s `CAPABILITIES` table `except` list,
+and (3) still assert every row the backend's wire format can produce. Cursor is
+the first backend to use this: its documented print-mode `result` frame carries
+no `usage`, and `thinking` events are documented as suppressed in print mode —
+both cited inline next to the exclusion in the test.
 
 ## 7. The golden-fixture testing contract
 
@@ -384,11 +398,16 @@ is duplicated; that list is the concrete map. To be first-class:
 5. **v1 alongside v2** — wire `SessionOptions.onUiEvent`; keep the v1
    `AgentEvent` stream flowing unchanged.
 6. **Golden fixtures** — `packages/cezar/src/core/__fixtures__/pi/*.ndjson` + `*.expected.json`,
-   wire-faithful and citing their upstream source, covering **every** parity
-   matrix capability (§6), and a `pi-ui-mapper.test.ts` replaying them.
+   wire-faithful and citing their upstream source, covering every parity matrix
+   capability the backend's wire format is able to produce (§6) — and a
+   `pi-ui-mapper.test.ts` replaying them. Where a capability genuinely cannot be
+   produced, cite why in the fixture/test the way cursor's `usage`/`thinking`
+   exclusions do; never fabricate a frame to fill a row.
 7. **Parity** — add `pi` to `BACKENDS` in `ui-parity.test.ts`; every capability
-   row must pass. (If the backend has no wire parent attribution, document the
-   nesting cell's substitute the way codex's review-mode items are handled.)
+   row must pass, or be excluded via that row's `except` list with a cited
+   reason (§6) — never silently skipped. (If the backend has no wire parent
+   attribution, document the nesting cell's substitute the way codex's
+   review-mode items are handled.)
 8. **Plumbing** — the run-store `runner` enum, workflow step schema, the
    `POST /api/runs` / `PUT /api/config` bodies, `resumeCommand()`, the web
    `Runner` type, composer pills/presets, and Settings → Agents. Keep additive
