@@ -41,6 +41,7 @@ const RESUME_COMMAND_PREFIX: Record<Runner, string> = {
   codex: 'codex resume',
   opencode: 'opencode --session',
   cursor: 'agent --resume',
+  pi: 'pi --session',
 }
 
 /** The per-backend take-over command. Records without a runner recorded predate the runner

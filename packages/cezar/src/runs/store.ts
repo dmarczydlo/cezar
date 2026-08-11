@@ -7,6 +7,10 @@ import { collectSecretValues, redactDeep, redactSecrets } from '../core/secret-r
 // Type-only module (zod + nothing else), so this cannot cycle back into the store.
 import { workflowDefSchema } from '../workflows/types.ts';
 
+import { RUNNER_IDS } from '../core/agent-runner.ts';
+
+import type { RunnerId } from '../core/agent-runner.ts';
+
 export type RunStatus = 'queued' | 'running' | 'waiting' | 'review' | 'done' | 'failed' | 'cancelled';
 /**
  * A sub-state of `running` (spec 2026-07-18-subagent-monitoring-status, #490):
@@ -29,7 +33,7 @@ export type StepStatus =
 const usageCounterSchema = z.number().finite().nonnegative();
 
 /**
- * A runner id as it may appear in a PERSISTED record, normalized to the four
+ * A runner id as it may appear in a PERSISTED record, normalized to the
  * ids the rest of cezar speaks (#547).
  *
  * `claude-cli` is the legacy spelling of `claude` — still a member of
@@ -41,15 +45,15 @@ const usageCounterSchema = z.number().finite().nonnegative();
  *
  * Parse-and-fold rather than widen: the legacy id is accepted on the way in and
  * collapsed to `claude`, so no consumer, wire type or contract schema ever sees
- * a fifth runner. The narrowing is one-way and permanent (the index is
+ * an extra runner. The narrowing is one-way and permanent (the index is
  * re-serialized from the parsed records), which is what "old run records
  * normalise identically to `claude`" in `core/model-identity.ts` has always
  * claimed. Use ONLY for read-back of stored state — request bodies, settings and
- * workflow step defs stay the four selectable ids (`RunnerId`), because nothing
+ * workflow step defs stay the selectable ids (`RunnerId`), because nothing
  * should be able to ASK for the legacy spelling.
  */
 const storedRunnerSchema = z
-  .enum(['claude', 'codex', 'opencode', 'cursor', 'claude-cli'])
+  .enum([...RUNNER_IDS, 'claude-cli'])
   .transform((id) => (id === 'claude-cli' ? ('claude' as const) : id));
 
 const stepStateSchema = z.object({
@@ -524,7 +528,7 @@ export class RunStore extends EventEmitter {
     workflow: string;
     task: string;
     model?: string;
-    runner?: 'claude' | 'codex' | 'opencode' | 'cursor';
+    runner?: RunnerId;
     /** Composer's per-task agent account (spec 2026-07-29-agent-profiles). */
     agentProfile?: string;
     generateFollowups?: boolean;

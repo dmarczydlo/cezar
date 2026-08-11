@@ -4,7 +4,7 @@ import { AGENT_MODELS_LOCKED_ENV } from './agent-model-policy.ts';
 import { profileEnv } from './agent-profiles.ts';
 import { withEnvPrefix } from './shell-env.ts';
 
-export const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
+export const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor', 'pi'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 export type ProviderConnectionState =
   | 'connected'
@@ -212,6 +212,21 @@ function parseOpenCodeStatus(result: ProviderCommandResult): ProviderConnectionS
   return storedCount > 0 || environmentCount > 0 ? 'connected' : 'disconnected';
 }
 
+function parsePiStatus(result: ProviderCommandResult): ProviderConnectionState | null {
+  if (result.exitCode !== 0) return null;
+  const lines = normalizedLines(result.stdout);
+  if (lines.some((line) => /^provider\s+model\s+context\s+max-out\s+thinking\s+images$/.test(line))) {
+    return 'connected';
+  }
+  if (
+    lines.some((line) => line.includes('no models available'))
+    && lines.some((line) => line.includes('/login'))
+  ) {
+    return 'disconnected';
+  }
+  return null;
+}
+
 const DESCRIPTORS: readonly ProviderDescriptor[] = [
   {
     id: 'claude',
@@ -245,6 +260,14 @@ const DESCRIPTORS: readonly ProviderDescriptor[] = [
     installHint:
       'Install the Cursor CLI (`curl https://cursor.com/install -fsS | bash`), then run `agent login` (or set CURSOR_API_KEY).',
     parse: parseCursorStatus,
+  },
+  {
+    id: 'pi',
+    executable: () => process.env.CEZ_PI_BIN ?? 'pi',
+    statusArgs: ['--list-models'],
+    loginArgs: ['/login'],
+    installHint: 'Install pi, then run `pi /login`.',
+    parse: parsePiStatus,
   },
 ];
 

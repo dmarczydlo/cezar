@@ -115,6 +115,16 @@ describe('resolveModelIdentity — bare ids per backend', () => {
     );
   });
 
+  it('pi rejects a bare id like opencode — same provider/model convention (#387)', () => {
+    expect(() => resolveModelIdentity('pi', 'sonnet')).toThrow(ModelIdentityError);
+    try {
+      resolveModelIdentity('pi', 'sonnet');
+    } catch (err) {
+      expect((err as Error).message).toContain('ambiguous');
+      expect((err as Error).message).toContain('pi');
+    }
+  });
+
   it('an explicit provider/model resolves for a multi-provider backend (opencode), any provider', () => {
     expect(resolveModelIdentity('opencode', 'anthropic/claude-opus-4-8')).toEqual({
       provider: 'anthropic',
@@ -185,8 +195,11 @@ describe('toBackendModel — wire form per backend', () => {
     );
   });
 
-  it('multi-provider backends (opencode) get the full provider/model', () => {
+  it('multi-provider backends (opencode, pi) get the full provider/model', () => {
     expect(toBackendModel('opencode', { provider: 'anthropic', model: 'claude-opus-4-8' })).toBe(
+      'anthropic/claude-opus-4-8',
+    );
+    expect(toBackendModel('pi', { provider: 'anthropic', model: 'claude-opus-4-8' })).toBe(
       'anthropic/claude-opus-4-8',
     );
   });
@@ -202,6 +215,10 @@ describe('round-trip: composer preset → resolve → render back to the wire st
       presets: ['anthropic/claude-opus-4-8', 'anthropic/claude-sonnet-5', 'openai/gpt-5.1'],
     },
     { backend: 'cursor', presets: ['kimi-k3-low', 'composer-2.5'] },
+    {
+      backend: 'pi',
+      presets: ['anthropic/claude-opus-4-8', 'anthropic/claude-sonnet-5', 'openai/gpt-5.1'],
+    },
   ];
 
   for (const { backend, presets } of cases) {

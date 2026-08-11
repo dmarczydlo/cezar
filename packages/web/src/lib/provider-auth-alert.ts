@@ -4,12 +4,13 @@ import type {
   WorkspaceUiState,
 } from '@open-mercato/cezar-api-client'
 
-const PROVIDERS: readonly ProviderId[] = ['claude', 'codex', 'opencode', 'cursor']
+const PROVIDERS: readonly ProviderId[] = ['claude', 'codex', 'opencode', 'cursor', 'pi']
 const LABELS: Record<ProviderId, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   opencode: 'OpenCode',
   cursor: 'Cursor',
+  pi: 'pi',
 }
 
 export interface ProviderAuthIncident {

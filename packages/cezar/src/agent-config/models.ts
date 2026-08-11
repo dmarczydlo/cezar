@@ -3,6 +3,7 @@ import { claudeModelSettingsStrategy } from './model-settings/claude.ts';
 import { codexModelSettingsStrategy } from './model-settings/codex.ts';
 import { cursorModelSettingsStrategy } from './model-settings/cursor.ts';
 import { opencodeModelSettingsStrategy } from './model-settings/opencode.ts';
+import { piModelSettingsStrategy } from './model-settings/pi.ts';
 import type { AgentModelSettings, AgentModelSettingsStrategy } from './model-settings/types.ts';
 
 /** The model defaults exposed by the coding agents' own settings files. */
@@ -18,6 +19,7 @@ const MODEL_SETTINGS_STRATEGIES: Record<RunnerId, AgentModelSettingsStrategy> = 
   codex: codexModelSettingsStrategy,
   opencode: opencodeModelSettingsStrategy,
   cursor: cursorModelSettingsStrategy,
+  pi: piModelSettingsStrategy,
 };
 
 export function readAgentModelSettings(

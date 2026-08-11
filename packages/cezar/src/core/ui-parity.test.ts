@@ -8,6 +8,9 @@
  * outputs (the hand-verified wire-faithful contract for each mapper): if a
  * future mapper change drops a capability — or a new fixture set forgets to
  * cover one — a named row fails here.
+ *
+ * `BACKENDS` lists every backend that owns a wire mapper. Pi uses its documented
+ * RPC protocol and therefore has its own wire-faithful fixture set.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -17,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 import type { UiEvent, UiItem } from './ui-events.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BACKENDS = ['claude', 'codex', 'opencode', 'cursor'] as const;
+const BACKENDS = ['claude', 'codex', 'opencode', 'cursor', 'pi'] as const;
 
 /** Every event across every golden fixture of one backend. */
 function fixtureEvents(backend: (typeof BACKENDS)[number]): UiEvent[] {

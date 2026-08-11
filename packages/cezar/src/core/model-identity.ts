@@ -98,6 +98,10 @@ export const BACKEND_MODEL_MAP: Readonly<Record<AgentBackend, BackendModelMap>> 
   // `composer-2.5`). Discovery fills the picker; the default provider is only
   // the canonical-identity namespace (stripped again in toBackendModel).
   cursor: { defaultProvider: 'cursor' },
+  // pi selects across providers with the same `provider/model` convention as
+  // opencode (#387) — no default provider, so a bare model is rejected loudly
+  // and `toBackendModel` hands pi the full `provider/model` on its `--model`.
+  pi: {},
 };
 
 const SLASH = '/';

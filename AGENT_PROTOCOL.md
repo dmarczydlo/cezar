@@ -35,9 +35,16 @@ id — that is the whole point of the seam.
 ### Identity
 
 ```ts
-type RunnerId    = 'claude' | 'codex' | 'opencode' | 'cursor';   // user-selectable
-type AgentBackend = RunnerId | 'claude-cli';          // + legacy id, still parses
+const RUNNER_IDS = ['claude', 'codex', 'opencode', 'cursor', 'pi'] as const;  // the source of truth
+type RunnerId     = (typeof RUNNER_IDS)[number];                             // user-selectable
+type AgentBackend = RunnerId | 'claude-cli';                                 // + legacy id, still parses
 ```
+
+`RUNNER_IDS` is the tuple every other enumeration derives from — the zod schemas
+(config, run store, workflow steps, the API bodies), the server-install
+"at least one agent CLI" gate, and the CLI-handoff registry. Re-listing the ids
+by hand is how a runner silently goes missing from one seam (#387 review); use
+`RUNNER_IDS` / `isRunnerId()` instead.
 
 `claude-cli` is a **legacy** backend id kept so old `runs.json` records and
 NDJSON transcripts still parse; `createRunner` maps it onto `claude`. Follow that
@@ -58,7 +65,8 @@ interface AgentRunner {
 - Each backend runs as a **persistent process** so multi-turn follow-ups,
   `waiting`, interrupt and resume all work: claude = stream-json over
   stdin/stdout; codex = `codex app-server` JSON-RPC 2.0 (JSONL) over
-  stdin/stdout; opencode = `opencode serve` over HTTP + SSE.
+  stdin/stdout; opencode = `opencode serve` over HTTP + SSE; pi =
+  `pi --mode rpc` over JSONL stdin/stdout.
 
 ### `AgentSession`
 
@@ -322,8 +330,8 @@ or a new fixture set forgets one — a named row fails. The matrix:
 - `turn.completed` with a `stopReason`
 - sub-agent **nesting** via `parentItemId` — only where the wire attributes work
   to its parent (claude's `parent_tool_use_id`, opencode's child-session parts
-  under a `subtask`); codex and cursor have no parent attribution in their wire
-  format, so their matrix cell is the task-kind tool items above instead
+  under a `subtask`); codex, cursor and pi have no parent attribution in their
+  wire format, so their matrix cell is the task-kind tool items above instead
 
 A new backend is not "done" until it produces every row its wire format is
 capable of. **Documented exceptions are allowed** when a capability provably
@@ -377,9 +385,13 @@ these events get persisted as NDJSON), and asserts `toStrictEqual` against the
 ## 9. Adding a new runner (the #387 `pi` checklist)
 
 A new backend is a **single class behind the seam** plus its mapper, fixtures and
-the parity row — never backend-specific types leaking past `packages/cezar/src/core/`. PR #387
-adds `pi` and enumerates every place the `'claude' | 'codex' | 'opencode'` union
-is duplicated; that list is the concrete map. To be first-class:
+the parity row — never backend-specific types leaking past
+`packages/cezar/src/core/`. PR #387 added `pi` and enumerated every place the
+runner union was duplicated; that list is the concrete map, and the union now
+derives from one `RUNNER_IDS` tuple in `agent-runner.ts` so most of it is
+typecheck-enforced rather than hand-tracked.
+
+To be first-class:
 
 1. **Runner** — `packages/cezar/src/core/pi-runner.ts` implementing `AgentRunner` /
    `AgentSession` (persistent process; `pid`; `sendMessage`/`end`/`interrupt`;
@@ -393,8 +405,9 @@ is duplicated; that list is the concrete map. To be first-class:
    name union; degrade gracefully when the CLI is absent (never fail boot). If it
    needs a binary override, add `CEZ_PI_BIN` — and per AGENTS.md's zero-config
    rule, document any new `CEZ_*` var in `.env.example` in the same commit.
-4. **Mapper** — `packages/cezar/src/core/pi-ui-mapper.ts` emitting the full v2 `UiEvent` stream
-   **alongside** v1. Never throw on malformed input; explicit immutable state.
+4. **Mapper** — `packages/cezar/src/core/<runner>-ui-mapper.ts` emitting the full
+   v2 `UiEvent` stream **alongside** v1. Never throw on malformed input; explicit
+   immutable state.
 5. **v1 alongside v2** — wire `SessionOptions.onUiEvent`; keep the v1
    `AgentEvent` stream flowing unchanged.
 6. **Golden fixtures** — `packages/cezar/src/core/__fixtures__/pi/*.ndjson` + `*.expected.json`,
@@ -415,7 +428,12 @@ is duplicated; that list is the concrete map. To be first-class:
    parseable — follow that precedent).
 9. **Model selection** — accept `provider/model` where relevant; #387 documents
    the existing inconsistencies (opencode drops a bare model silently) — do not
-   reproduce a silent-drop.
+   reproduce a silent-drop. A backend with no default provider gets no entry in
+   `BACKEND_MODEL_MAP`'s default column, so a bare id fails loud.
+10. **Credentials** — one entry in `BACKEND_ALLOW_PREFIXES` (`agent-env.ts`):
+   `buildChildEnv` is least-privilege per backend, so a multi-provider runner
+   must receive credentials for every provider its own model ids can name
+   without widening other backends.
 
 ## 10. The plan channel (PR #443)
 
