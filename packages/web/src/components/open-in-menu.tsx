@@ -84,8 +84,13 @@ export function openInIcon(target: OpenTarget): LucideIcon {
 }
 
 // Built from the shared Runner union's runtime values, not restated by hand — a hand-written
-// list here is exactly what let the cursor gap in this function go unnoticed (#807).
-const CLI_TARGET_RUNNER_RE = new RegExp(`^cli:(${runnerSchema.options.join('|')})$`)
+// list here is exactly what let the cursor gap in this function go unnoticed (#807). Every
+// current id is `[a-z]+`, so escaping is currently a no-op — but escape anyway: the whole point
+// of deriving the list is to survive a future id this file's author never thought about, and an
+// unescaped `.`/`+`/etc. would silently widen the match instead of failing loudly.
+const CLI_TARGET_RUNNER_RE = new RegExp(
+  `^cli:(${runnerSchema.options.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`,
+)
 
 /** The runner a `cli:<runner>` Open-in target hands off to, or undefined for every other
  *  target (editors, Finder, terminal) — mirrors the server's `agentCliRunner` (open-in-app.ts)

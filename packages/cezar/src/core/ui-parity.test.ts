@@ -87,6 +87,7 @@ const CAPABILITIES: ReadonlyArray<
       events.some(
         (e) => e.type === 'turn.completed' && (e.usage?.input ?? 0) > 0 && (e.usage?.output ?? 0) > 0,
       ),
+    // Same absent `result.usage` as the row above.
     ['cursor'],
   ],
   ['turn.completed with a stopReason', (events) => events.some((e) => e.type === 'turn.completed' && e.stopReason !== undefined)],
