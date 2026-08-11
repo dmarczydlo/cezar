@@ -215,7 +215,7 @@ export function NewTaskRoute() {
   const runner = runners.length > 0 ? resolveRunner(draft.runner, runners, preferredRunner) : null
   const displayRunner = runner ?? preferredRunner
   const providersReady = providers.isSuccess && runners.length > 0
-  const catalog = useRunnerModels()
+  const catalog = useRunnerModels(displayRunner)
   const modelsLocked = config.data?.modelsLocked === true
   const models = runner === null
     ? []
@@ -658,7 +658,7 @@ export function NewTaskRoute() {
                 }
                 onPick={(next) => update({ model: next })}
                 options={models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-                status={modelCatalogStatus(displayRunner, catalog.data, catalog.errorsByRunner[displayRunner])}
+                status={modelCatalogStatus(displayRunner, catalog.data, catalog.isError)}
               />
               <PickerPill
                 slot="variants-pill"

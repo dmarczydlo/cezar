@@ -1,8 +1,10 @@
+import { runnerDiscoversModels } from '@open-mercato/cezar-api-client'
 import type {
   BackendCheck,
   CreateRunInput,
   CreateRunResponse,
   ImageInput,
+  ModelDiscoveryRunner,
   Runner,
   RunnerModelCatalogResponse,
   Skill,
@@ -53,10 +55,11 @@ export interface ModelPreset {
   desc: string
 }
 
-/** Static model presets per runner. `id: ''` is always "auto" —
- *  no model flag, the runner decides. Claude takes tier aliases + pinned versions; Codex takes
- *  Codex entries are supplied by host discovery; OpenCode takes `provider/model` ids.
- *  Cursor entries beyond auto are supplied by host discovery (`agent models`). */
+/** Static model presets per runner. `id: ''` is always "auto" — no model flag, the runner
+ *  decides. Claude takes tier aliases + pinned versions, the only runner with no host-local
+ *  catalog to ask. Codex, OpenCode and Cursor list `auto` alone: their entries come from
+ *  discovery (`runnerDiscoversModels`), because a hard-coded list is stale the moment the host's
+ *  provider ships a model — which is exactly what #794 reported for OpenCode. */
 export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
   claude: [
     { id: '', label: 'auto', desc: 'Pick the best model per step' },
@@ -73,10 +76,6 @@ export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
   ],
   opencode: [
     { id: '', label: 'auto', desc: 'Use your OpenCode default model' },
-    { id: 'anthropic/claude-opus-4-8', label: 'claude-opus-4.8', desc: 'via Anthropic' },
-    { id: 'anthropic/claude-sonnet-5', label: 'claude-sonnet-5', desc: 'via Anthropic' },
-    { id: 'openai/gpt-5.1', label: 'gpt-5.1', desc: 'via OpenAI' },
-    { id: 'openai/gpt-5.1-codex', label: 'gpt-5.1-codex', desc: 'via OpenAI' },
   ],
   cursor: [
     { id: '', label: 'auto', desc: 'Use your Cursor default model' },
@@ -94,36 +93,15 @@ export function modelConflictsWithRunner(model: string, runner: Runner): boolean
   )
 }
 
-const DISCOVERED_MODEL_RUNNERS = new Set<Runner>(['codex', 'cursor'])
-
-function isRunnerModelCatalog(
-  value: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
-): value is RunnerModelCatalogResponse {
-  return Array.isArray((value as RunnerModelCatalogResponse).models)
-    && typeof (value as RunnerModelCatalogResponse).runner === 'string'
-    && typeof (value as RunnerModelCatalogResponse).source === 'string'
-}
-
-/** Resolve the catalog row for `runner` from either a single response or a per-runner map. */
-export function catalogForRunner(
-  runner: Runner,
-  catalogs?: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
-): RunnerModelCatalogResponse | undefined {
-  if (!catalogs) return undefined
-  if (isRunnerModelCatalog(catalogs)) return catalogs.runner === runner ? catalogs : undefined
-  return catalogs[runner]
-}
-
 export function modelsForRunner(
   runner: Runner,
-  catalogs?: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
+  catalog?: RunnerModelCatalogResponse,
   customIds: readonly (string | null | undefined)[] = [],
 ): readonly ModelPreset[] {
   const base = [...(MODELS_BY_RUNNER[runner] ?? MODELS_BY_RUNNER.claude)]
   const seen = new Set(base.map((model) => model.id))
-  const catalog = catalogForRunner(runner, catalogs)
-  if (DISCOVERED_MODEL_RUNNERS.has(runner) && catalog) {
-    for (const model of catalog.models) {
+  if (runnerDiscoversModels(runner)) {
+    for (const model of catalog?.models ?? []) {
       if (!model.id || seen.has(model.id)) continue
       seen.add(model.id)
       base.push({ id: model.id, label: model.label || model.id, desc: model.description })
@@ -140,16 +118,22 @@ export function modelsForRunner(
   return base
 }
 
+/** How each discovery runner is named in the picker's status line. */
+const DISCOVERY_RUNNER_LABEL: Record<ModelDiscoveryRunner, string> = {
+  codex: 'Codex',
+  opencode: 'OpenCode',
+  cursor: 'Cursor',
+}
+
 export function modelCatalogStatus(
   runner: Runner,
-  catalogs?: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
+  catalog?: RunnerModelCatalogResponse,
   failed = false,
 ): string | undefined {
-  if (!DISCOVERED_MODEL_RUNNERS.has(runner)) return undefined
-  const catalog = catalogForRunner(runner, catalogs)
-  const label = runner === 'codex' ? 'Codex' : 'Cursor'
-  if (catalog?.stale) return `Using cached ${label} model list`
-  if (failed || catalog?.source === 'unavailable') return `Latest ${label} models unavailable`
+  if (!runnerDiscoversModels(runner)) return undefined
+  const name = DISCOVERY_RUNNER_LABEL[runner]
+  if (catalog?.stale) return `Using cached ${name} model list`
+  if (failed || catalog?.source === 'unavailable') return `Latest ${name} models unavailable`
   return undefined
 }
 
@@ -195,9 +179,9 @@ export function resolveModel(
   picked: string | null,
   runner: Runner,
   defaults?: Partial<Record<Runner, string>>,
-  catalogs?: RunnerModelCatalogResponse | Partial<Record<Runner, RunnerModelCatalogResponse>>,
+  catalog?: RunnerModelCatalogResponse,
 ): string {
-  const models = modelsForRunner(runner, catalogs, [picked, defaults?.[runner]])
+  const models = modelsForRunner(runner, catalog, [picked, defaults?.[runner]])
   if (picked !== null && models.some((m) => m.id === picked)) return picked
   const preset = defaults?.[runner]
   if (preset !== undefined && models.some((m) => m.id === preset)) return preset

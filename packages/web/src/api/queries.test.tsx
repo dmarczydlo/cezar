@@ -117,51 +117,51 @@ class FakeHealthSocket {
 }
 
 describe('useRunnerModels', () => {
-  it('loads workspace Codex and Cursor catalogs into a per-runner map', async () => {
-    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
-      const url = String(input)
-      if (url === '/api/v1/models?runner=codex') {
-        return json({
-          runner: 'codex',
-          models: [{ id: 'gpt-future', label: 'Future', description: '' }],
-          source: 'live',
-          stale: false,
-        })
-      }
-      if (url === '/api/v1/models?runner=cursor') {
-        return json({
-          runner: 'cursor',
-          models: [{ id: 'composer-2.5', label: 'Composer 2.5', description: '' }],
-          source: 'live',
-          stale: false,
-        })
-      }
-      return new Promise<never>(() => {})
-    })
-    const { result } = renderHook(() => useRunnerModels(), { wrapper: wrapper() })
-    await waitFor(() => expect(result.current.data.codex?.models[0]?.id).toBe('gpt-future'))
-    expect(result.current.data.cursor?.models[0]?.id).toBe('composer-2.5')
-    expect(fetchMock.mock.calls.map((call) => call[0]).sort()).toEqual([
-      '/api/v1/models?runner=codex',
-      '/api/v1/models?runner=cursor',
-    ])
+  it('loads the workspace Codex catalog', async () => {
+    fetchMock.mockResolvedValue(json({ runner: 'codex', models: [{ id: 'gpt-future', label: 'Future', description: '' }], source: 'live', stale: false }))
+    const { result } = renderHook(() => useRunnerModels('codex'), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.models[0]?.id).toBe('gpt-future')
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('/api/v1/models?runner=codex')
   })
 
-  it('reports catalog failure per runner — one runner erroring must not flag the other', async () => {
+  it('loads the OpenCode catalog from its own cache entry (#794)', async () => {
+    fetchMock.mockResolvedValue(json({ runner: 'opencode', models: [{ id: 'openai/gpt-5.4', label: 'openai/gpt-5.4', description: 'via openai' }], source: 'live', stale: false }))
+    const { result } = renderHook(() => useRunnerModels('opencode'), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.models[0]?.id).toBe('openai/gpt-5.4')
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('/api/v1/models?runner=opencode')
+  })
+
+  it('loads the Cursor catalog from its own cache entry (#807)', async () => {
+    fetchMock.mockResolvedValue(json({ runner: 'cursor', models: [{ id: 'composer-2.5', label: 'Composer 2.5', description: '' }], source: 'live', stale: false }))
+    const { result } = renderHook(() => useRunnerModels('cursor'), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.models[0]?.id).toBe('composer-2.5')
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('/api/v1/models?runner=cursor')
+  })
+
+  it('never asks the server about claude, which has no host catalog', async () => {
+    const { result } = renderHook(() => useRunnerModels('claude'), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.fetchStatus).toBe('idle'))
+    expect(result.current.data).toBeUndefined()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('one runner erroring does not affect a separate hook instance for another runner (#807)', async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url === '/api/v1/models?runner=codex') {
         return json({ runner: 'codex', models: [{ id: 'gpt-future', label: 'Future', description: '' }], source: 'live', stale: false })
       }
-      if (url === '/api/v1/models?runner=cursor') {
-        return new Response('boom', { status: 500 })
-      }
+      if (url === '/api/v1/models?runner=cursor') return new Response('boom', { status: 500 })
       return new Promise<never>(() => {})
     })
-    const { result } = renderHook(() => useRunnerModels(), { wrapper: wrapper() })
-    await waitFor(() => expect(result.current.errorsByRunner.cursor).toBe(true), { timeout: 5000 })
-    expect(result.current.errorsByRunner.codex).toBeUndefined()
-    expect(result.current.data.codex?.models[0]?.id).toBe('gpt-future')
+    const { result: codex } = renderHook(() => useRunnerModels('codex'), { wrapper: wrapper() })
+    const { result: cursor } = renderHook(() => useRunnerModels('cursor'), { wrapper: wrapper() })
+    await waitFor(() => expect(cursor.current.isError).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(codex.current.isSuccess).toBe(true))
+    expect(codex.current.data?.models[0]?.id).toBe('gpt-future')
   })
 })
 

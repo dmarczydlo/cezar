@@ -35,12 +35,17 @@ import {
 } from '@open-mercato/cezar-contract';
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
-import { openProjectInSchema, updateProjectInputSchema } from '@open-mercato/cezar-contract';
+import {
+  modelDiscoveryRunnerSchema,
+  openProjectInSchema,
+  updateProjectInputSchema,
+} from '@open-mercato/cezar-contract';
 import { detectEnvironment } from '../core/backend-detect.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { discoverCodexModels } from '../core/codex-model-catalog.ts';
 import { discoverCursorModels } from '../core/cursor-model-catalog.ts';
+import { discoverOpencodeModels } from '../core/opencode-model-catalog.ts';
 import {
   PROVIDER_IDS,
   ProviderAuthService,
@@ -1036,6 +1041,7 @@ export function createApp(deps: ServerDeps) {
   const modelCatalog = deps.modelCatalog ?? new RunnerModelCatalog({
     adapters: {
       codex: { discover: () => discoverCodexModels({ cwd: bootRoot }) },
+      opencode: { discover: () => discoverOpencodeModels({ cwd: bootRoot }) },
       cursor: { discover: () => discoverCursorModels() },
     },
   });
@@ -1625,11 +1631,10 @@ export function createApp(deps: ServerDeps) {
 
   // ---- chained family: host model catalog (workspace-level) ----
   const modelsRoutes = new Hono<ProjectApiEnv>()
-    .get('/models', queryZodValidator(z.object({
-      runner: z.union([z.string(), z.array(z.string()).transform((v) => v[0] as string)]).pipe(
-        z.enum(['codex', 'cursor']),
-      ),
-    }), { message: 'runner must be codex or cursor' }), async (c) => {
+    // `modelDiscoveryRunnerSchema` is the contract's own list of the runners with an
+    // authoritative host-local catalog (#794), so the client compiles against exactly what this
+    // validates. Claude has no such source: its picker stays on static presets and this 400s.
+    .get('/models', queryZodValidator(z.object({ runner: z.union([z.string(), z.array(z.string()).transform((v) => v[0] as string)]).pipe(modelDiscoveryRunnerSchema) }), { message: 'runner must be codex, opencode, or cursor' }), async (c) => {
       const query = { data: c.req.valid('query') };
       return c.json(await modelCatalog.get(query.data.runner));
     });

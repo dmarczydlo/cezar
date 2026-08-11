@@ -74,17 +74,26 @@ describe('model option resolution', () => {
     expect(modelsForRunner('codex', catalog, ['legacy-id']).at(-1)?.desc).toBe('Custom or legacy model')
   })
 
-  it('cursor: auto plus host-discovered ids from a per-runner map', () => {
-    const catalogs = {
-      cursor: {
-        runner: 'cursor' as const,
+  it('cursor: auto alone until the host catalog answers, plus host-discovered ids once it does', () => {
+    expect(modelsForRunner('cursor').map((m) => m.id)).toEqual([''])
+    expect(
+      modelsForRunner('cursor', {
+        runner: 'cursor',
         models: [{ id: 'composer-2.5', label: 'Composer 2.5', description: '' }],
-        source: 'live' as const,
+        source: 'live',
         stale: false,
-      },
-    }
-    expect(modelsForRunner('cursor', catalogs).map((m) => m.id)).toEqual(['', 'composer-2.5'])
-    expect(modelsForRunner('codex', catalogs).map((m) => m.id)).toEqual([''])
+      }).map((m) => m.id),
+    ).toEqual(['', 'composer-2.5'])
+  })
+
+  it('a pinned Cursor id the host no longer offers stays selectable', () => {
+    expect(
+      modelsForRunner(
+        'cursor',
+        { runner: 'cursor', models: [], source: 'unavailable', stale: false },
+        ['composer-2.5'],
+      ).map((m) => m.id),
+    ).toEqual(['', 'composer-2.5'])
   })
 
   it('reports stale and unavailable Codex catalogs without exposing reasons', () => {
@@ -94,17 +103,40 @@ describe('model option resolution', () => {
   })
 
   it('reports Cursor catalog status the same way', () => {
-    expect(
-      modelCatalogStatus('cursor', {
-        cursor: { runner: 'cursor', models: [], source: 'unavailable', stale: false },
-      }),
-    ).toBe('Latest Cursor models unavailable')
+    expect(modelCatalogStatus('cursor', { runner: 'cursor', models: [], source: 'unavailable', stale: false })).toBe('Latest Cursor models unavailable')
+    expect(modelCatalogStatus('cursor', undefined, true)).toBe('Latest Cursor models unavailable')
   })
 
-  it('opencode: provider/model ids, newest Anthropic + OpenAI', () => {
-    expect(modelsForRunner('opencode').map((m) => m.id)).toEqual([
-      '', 'anthropic/claude-opus-4-8', 'anthropic/claude-sonnet-5', 'openai/gpt-5.1', 'openai/gpt-5.1-codex',
-    ])
+  it('opencode: auto alone until the host catalog answers (#794)', () => {
+    expect(modelsForRunner('opencode').map((m) => m.id)).toEqual([''])
+    expect(
+      modelsForRunner('opencode', {
+        runner: 'opencode',
+        models: [
+          { id: 'openai/gpt-5.4', label: 'openai/gpt-5.4', description: 'via openai' },
+          { id: 'anthropic/claude-sonnet-5', label: 'anthropic/claude-sonnet-5', description: 'via anthropic' },
+        ],
+        source: 'live',
+        stale: false,
+      }).map((m) => m.id),
+    ).toEqual(['', 'openai/gpt-5.4', 'anthropic/claude-sonnet-5'])
+  })
+
+  it('a pinned OpenCode id the host no longer offers stays selectable', () => {
+    expect(
+      modelsForRunner(
+        'opencode',
+        { runner: 'opencode', models: [], source: 'unavailable', stale: false },
+        ['openai/gpt-5.1'],
+      ).map((m) => m.id),
+    ).toEqual(['', 'openai/gpt-5.1'])
+  })
+
+  it('names the runner whose catalog is stale or unavailable', () => {
+    expect(
+      modelCatalogStatus('opencode', { runner: 'opencode', models: [], source: 'cache', stale: true, reason: 'raw' }),
+    ).toBe('Using cached OpenCode model list')
+    expect(modelCatalogStatus('opencode', undefined, true)).toBe('Latest OpenCode models unavailable')
   })
 
   it('resolveModel keeps known picks and arbitrary native model pins', () => {

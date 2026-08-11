@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueries, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 
 import { mergeProviderStatusResponse } from '@/lib/provider-status'
 
@@ -69,7 +69,7 @@ import {
   putAgentConfigFile,
   retryProviderAuth,
 } from './client'
-import { queryScope } from '@open-mercato/cezar-api-client'
+import { queryScope, runnerDiscoversModels } from '@open-mercato/cezar-api-client'
 import { useProjectScope } from './project-scope-context'
 import { githubRepoBase } from '@/lib/tasks-table'
 import { normalizeTagsForDisplay } from '@/lib/project-tags'
@@ -79,13 +79,13 @@ import type {
   CreateAgentProfileInput,
   HealthResponse,
   MessageInput,
+  Runner,
   PatchRunInput,
   ProviderId,
   OpenAgentAccountFileInput,
   ProjectListEntry,
   ProjectsResponse,
   ProviderStatusResponse,
-  Runner,
   RunRecord,
   SelectAgentProfileInput,
   SetAgentConfigInput,
@@ -229,51 +229,49 @@ export const workspaceQueryKeys = {
     [...workspaceQueryKeys.fsBrowseRoot, path, showHidden] as const,
 }
 
-/** `enabled` lets a caller that only MIGHT render the model pills (the thread's Continue —
- *  hooks cannot be called conditionally) skip the fetch when it definitely won't.
- *  `.data` is a per-runner map for discovery-backed backends (codex + cursor). */
-export function useRunnerModels(enabled = true) {
-  const results = useQueries({
-    queries: [
-      {
-        queryKey: workspaceQueryKeys.models('codex'),
-        queryFn: ({ signal }: { signal: AbortSignal }) => getRunnerModels('codex', { signal }),
-        staleTime: 5 * 60 * 1_000,
-        enabled,
-      },
-      {
-        queryKey: workspaceQueryKeys.models('cursor'),
-        queryFn: ({ signal }: { signal: AbortSignal }) => getRunnerModels('cursor', { signal }),
-        staleTime: 5 * 60 * 1_000,
-        enabled,
-      },
-    ],
+/**
+ * One runner's host-discovered catalog, cached per runner (#794 — this used to be hard-wired to
+ * Codex, which is why OpenCode had nothing but stale presets to show). Cursor (#807) discovers
+ * the same way — nothing runner-specific lives here, `runnerDiscoversModels` already knows it.
+ *
+ * A runner with no host catalog (claude) never fetches and never resolves data, so its picker
+ * falls back to static presets exactly as before — callers can pass any runner and read
+ * `data`/`isError` without checking first. Because each caller fetches only the runner it is
+ * actually about to render, one runner's catalog failure can never mark another runner's picker
+ * unavailable — there is no shared state left to poison.
+ *
+ * `enabled` lets a caller that only MIGHT render the model pills (the thread's Continue — hooks
+ * cannot be called conditionally) skip the fetch when it definitely won't.
+ */
+export function useRunnerModels(runner: Runner, enabled = true) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.models(runner),
+    // The narrowing IS the guard — the query is disabled for a runner with no host catalog, so
+    // this branch is unreachable rather than merely unlikely, and no cast is needed to say so.
+    queryFn: ({ signal }) =>
+      runnerDiscoversModels(runner)
+        ? getRunnerModels(runner, { signal })
+        : Promise.reject(new Error(`${runner} has no host model catalog`)),
+    staleTime: 5 * 60 * 1_000,
+    enabled: enabled && runnerDiscoversModels(runner),
   })
-  const [codex, cursor] = results
-  const data = useMemo(
-    () => ({
-      ...(codex?.data ? { codex: codex.data } : {}),
-      ...(cursor?.data ? { cursor: cursor.data } : {}),
-    }),
-    [codex?.data, cursor?.data],
-  )
-  // Per-runner, so one runner's catalog failure doesn't mark every runner's picker
-  // unavailable — a Cursor fetch error must not tell Codex users their models are gone.
-  const errorsByRunner = useMemo<Partial<Record<Runner, boolean>>>(
-    () => ({
-      ...(codex?.isError ? { codex: true } : {}),
-      ...(cursor?.isError ? { cursor: true } : {}),
-    }),
-    [codex?.isError, cursor?.isError],
-  )
-  return {
-    data,
-    isPending: enabled && results.some((result) => result.isPending),
-    isError: results.some((result) => result.isError),
-    errorsByRunner,
-    isFetching: results.some((result) => result.isFetching),
-    error: results.find((result) => result.error)?.error,
-  }
+}
+
+/**
+ * Every runner's catalog at once, keyed by runner — for the screens that render a row PER runner
+ * (the Settings default-model selects) rather than one for the runner the user picked.
+ *
+ * One `useRunnerModels` call per runner in a fixed order, so the hook count never varies and
+ * each catalog keeps its own cache entry, `enabled` state and error state.
+ */
+export function useRunnerModelCatalogs(
+  enabled = true,
+): Record<Runner, ReturnType<typeof useRunnerModels>> {
+  const claude = useRunnerModels('claude', enabled)
+  const codex = useRunnerModels('codex', enabled)
+  const opencode = useRunnerModels('opencode', enabled)
+  const cursor = useRunnerModels('cursor', enabled)
+  return { claude, codex, opencode, cursor }
 }
 
 export function useProviderStatus() {
