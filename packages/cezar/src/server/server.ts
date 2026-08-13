@@ -5616,11 +5616,39 @@ export function isSafeSessionId(sessionId: string): boolean {
   return SAFE_SESSION_ID.test(sessionId);
 }
 
+/** Characters unsafe to embed in the resumed CLI binary path under EITHER shell
+ *  `openInTerminal` targets: control characters, and the quote/expansion characters
+ *  that mean something different (or nothing safe) to bash vs. cmd.exe. A path
+ *  carrying one of these cannot be made safe by quoting, so {@link quoteResumeBin}
+ *  refuses it outright rather than guess. */
+const EXECUTABLE_UNSAFE_RE = /[\u0000-\u001f\u007f"'$`%!]/;
+
+/**
+ * The resumed CLI's binary, ready to splice into the take-over command — unchanged
+ * when it needs no quoting, double-quoted when it contains whitespace, or `null`
+ * when it cannot be embedded safely on either shell `openInTerminal` targets.
+ *
+ * Unlike the session id (validated, never quoted — see {@link resumeCommand}'s
+ * docstring), a binary override is a real filesystem path and legitimately
+ * contains spaces (`C:\Program Files\Cursor\agent.exe` is the common shape), so
+ * refusing every space-carrying value would break the override this exists to
+ * support. Double quotes are the one wrapping both shells agree on for a plain
+ * path: bash's `\` is only special before `$`/`` ` ``/`"`/`\`/newline, none of
+ * which a Windows path spells, so a backslash-heavy path stays literal inside
+ * them; cmd.exe's own quoting uses the same character. `EXECUTABLE_UNSAFE_RE`
+ * rules out anything either shell would treat specially inside that wrapping.
+ */
+export function quoteResumeBin(bin: string): string | null {
+  if (EXECUTABLE_UNSAFE_RE.test(bin)) return null;
+  return /\s/.test(bin) ? `"${bin}"` : bin;
+}
+
 /**
  * The CLI command that reopens a run's session for interactive take-over, per
  * backend. Legacy/undefined records default to Claude. Returns null when the id
- * is not a shape we recognise — callers degrade (no take-over) rather than
- * splice it into a shell.
+ * is not a shape we recognise, or when a runner's overridable binary cannot be
+ * embedded safely (see {@link quoteResumeBin}) — callers degrade (no take-over)
+ * rather than splice either one into a shell.
  *
  * Validate, don't quote (#431): the session id is the only variable spliced
  * into the command string, and `openInTerminal` runs that string through bash
@@ -5639,8 +5667,10 @@ export function resumeCommand(runner: string | undefined, sessionId: string): st
       return `codex resume ${sessionId}`;
     case 'opencode':
       return `opencode --session ${sessionId}`;
-    case 'cursor':
-      return `${process.env.CEZ_CURSOR_AGENT_BIN ?? 'agent'} --resume ${sessionId}`;
+    case 'cursor': {
+      const bin = quoteResumeBin(process.env.CEZ_CURSOR_AGENT_BIN ?? 'agent');
+      return bin === null ? null : `${bin} --resume ${sessionId}`;
+    }
     case 'pi':
       return `pi --session ${sessionId}`;
     default:

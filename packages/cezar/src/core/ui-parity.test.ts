@@ -110,7 +110,8 @@ describe('protocol v2 backend parity (all first-class mappers emit every matrix 
   // Sub-agent NESTING rides on parentItemId where the wire attributes work
   // to its parent: claude `parent_tool_use_id` and opencode child-session
   // parts under a `subtask`. Codex and Cursor print-mode wire have no parent
-  // attribution — their matrix cell is the task-kind tool items asserted above.
+  // attribution, and pi's RPC protocol carries no parent-item id either —
+  // all three's matrix cell is the task-kind tool items asserted above.
   for (const backend of ['claude', 'opencode'] as const) {
     it(`${backend} nests sub-agent work via parentItemId`, () => {
       expect(items(fixtureEvents(backend)).some((item) => item.parentItemId !== undefined)).toBe(true);
