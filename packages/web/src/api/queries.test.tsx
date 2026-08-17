@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from './client'
 import { createQueryClient } from './query-client'
 import { setApiScope } from '@open-mercato/cezar-api-client'
+import { ProjectScopeContext } from './project-scope-context'
+import type { GithubRefStatusData } from '@open-mercato/cezar-api-client'
 import {
+  refStatusRecheckAfter,
+  useReferenceProjectId,
   queryKeys,
   useProviderStatus,
   useRefreshProviderStatus,
@@ -133,11 +137,35 @@ describe('useRunnerModels', () => {
     expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('/api/v1/models?runner=opencode')
   })
 
+  it('loads the Cursor catalog from its own cache entry (#807)', async () => {
+    fetchMock.mockResolvedValue(json({ runner: 'cursor', models: [{ id: 'composer-2.5', label: 'Composer 2.5', description: '' }], source: 'live', stale: false }))
+    const { result } = renderHook(() => useRunnerModels('cursor'), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.models[0]?.id).toBe('composer-2.5')
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('/api/v1/models?runner=cursor')
+  })
+
   it('never asks the server about claude, which has no host catalog', async () => {
     const { result } = renderHook(() => useRunnerModels('claude'), { wrapper: wrapper() })
     await waitFor(() => expect(result.current.fetchStatus).toBe('idle'))
     expect(result.current.data).toBeUndefined()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('one runner erroring does not affect a separate hook instance for another runner (#807)', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/v1/models?runner=codex') {
+        return json({ runner: 'codex', models: [{ id: 'gpt-future', label: 'Future', description: '' }], source: 'live', stale: false })
+      }
+      if (url === '/api/v1/models?runner=cursor') return new Response('boom', { status: 500 })
+      return new Promise<never>(() => {})
+    })
+    const { result: codex } = renderHook(() => useRunnerModels('codex'), { wrapper: wrapper() })
+    const { result: cursor } = renderHook(() => useRunnerModels('cursor'), { wrapper: wrapper() })
+    await waitFor(() => expect(cursor.current.isError).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(codex.current.isSuccess).toBe(true))
+    expect(codex.current.data?.models[0]?.id).toBe('gpt-future')
   })
 })
 
@@ -147,7 +175,8 @@ describe('provider status workspace query', () => {
       { provider: 'claude', status: 'connected', enabled: true },
       { provider: 'codex', status: 'disconnected', enabled: true, hint: 'Run codex login.' },
       { provider: 'opencode', status: 'not-installed', enabled: true },
-    ],
+      { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
   }
 
   afterEach(() => {
@@ -248,7 +277,8 @@ describe('provider status workspace query', () => {
         { provider: 'claude', status: 'disconnected', enabled: true },
         { provider: 'codex', status: 'connected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     }
     fetchMock.mockResolvedValue(json(refreshed))
     const client = createQueryClient()
@@ -279,7 +309,8 @@ describe('provider status workspace query', () => {
         { provider: 'claude', status: 'disconnected', enabled: true, authFailureId: 'sse-1', hint: 'Reconnect.' },
         { provider: 'codex', status: 'connected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     })
 
     await act(async () => deferred.resolve(json(PROVIDERS)))
@@ -307,7 +338,8 @@ describe('provider status workspace query', () => {
         { provider: 'claude', status: 'disconnected', enabled: true, authFailureId: 'sse-1', hint: 'Reconnect.' },
         { provider: 'codex', status: 'connected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     })
 
     await act(async () => deferred.resolve(json(PROVIDERS)))
@@ -324,7 +356,8 @@ describe('provider status workspace query', () => {
         { provider: 'claude', status: 'connected', enabled: true },
         { provider: 'codex', status: 'connected', enabled: false },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     }
     fetchMock.mockResolvedValue(json(confirmed))
     const client = createQueryClient()
@@ -352,7 +385,8 @@ describe('provider status workspace query', () => {
         { provider: 'claude', status: 'disconnected', enabled: true, authFailureId: 'retry-1', hint: 'Reconnect.' },
         { provider: 'codex', status: 'connected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     })
     const { result } = renderHook(() => useRetryProviderAuth(), {
       wrapper: ({ children }: { children: ReactNode }) => (
@@ -367,7 +401,8 @@ describe('provider status workspace query', () => {
         { provider: 'claude', status: 'disconnected', enabled: true, authFailureId: 'sse-2', hint: 'Reconnect again.' },
         { provider: 'codex', status: 'connected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     })
 
     await act(async () => deferred.resolve(json(PROVIDERS)))
@@ -384,7 +419,8 @@ describe('provider status workspace query', () => {
         { provider: 'claude', status: 'disconnected', enabled: true, authFailureId: 'incident-1' },
         { provider: 'codex', status: 'connected', enabled: true },
         { provider: 'opencode', status: 'not-installed', enabled: true },
-      ],
+        { provider: 'cursor', status: 'not-installed', enabled: true },
+        ],
     }
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'stale incident' }), { status: 409 }))
     const client = createQueryClient()
@@ -953,5 +989,93 @@ describe('query defaults', () => {
     expect(defaults?.refetchInterval).toBe(false)
     expect(defaults?.refetchOnWindowFocus).toBe(false)
     expect(defaults?.staleTime).toBeGreaterThanOrEqual(60_000)
+  })
+})
+
+/**
+ * The refresh policy for reference statuses — and specifically, that the cockpit no longer HAS
+ * one.
+ *
+ * Reference statuses are the one query family here that polls: everything else is told what
+ * changed by the run stream, and GitHub is outside that stream, so a chip reading "checks running"
+ * has no other way to ever stop saying it. But *when* to ask is forge semantics — a merged pull
+ * request can never change, a closed one can be reopened, a running check finishes in minutes —
+ * and those live server-side, next to the cache that decides whether asking would even reach
+ * GitHub. The cockpit obeys `recheckAfterMs` and holds no table of its own; a second copy here
+ * would be two sets of constants that must agree with nothing enforcing it.
+ */
+/**
+ * One project, one name.
+ *
+ * The bug this pins: the global Tasks page keys every chip by its run's real `projectId`, because
+ * its rows span the registry — while an unscoped surface (the sidebar, the run header, the
+ * per-project table) used the `'default'` alias the routes accept. The same pull request was then
+ * remembered under two names: a status learned on one surface never reached the other, and both
+ * fetched it separately. Reported as "the ref updated in All tasks but the sidebar still holds
+ * the old status".
+ */
+describe('useReferenceProjectId', () => {
+  /** `useProjectScope` reads React context — the module-level `setApiScope` is a different seam. */
+  const mounted = (scope: string | null, health?: unknown) => {
+    const client = createQueryClient()
+    if (health !== undefined) client.setQueryData(queryKeys.health, health)
+    return function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <QueryClientProvider client={client}>
+          <ProjectScopeContext.Provider value={{ projectId: scope, apiBase: '/api/v1' }}>
+            {children}
+          </ProjectScopeContext.Provider>
+        </QueryClientProvider>
+      )
+    }
+  }
+
+  it('uses the mounted scope when there is one', () => {
+    const { result } = renderHook(() => useReferenceProjectId(), {
+      wrapper: mounted('proj-a', { ...HEALTH, bootProject: 'boot-id' }),
+    })
+    expect(result.current).toBe('proj-a')
+  })
+
+  it('names the BOOT project when unscoped — never the `default` alias', () => {
+    // `default` would key the same reference differently from every cross-project surface.
+    const { result } = renderHook(() => useReferenceProjectId(), {
+      wrapper: mounted(null, { ...HEALTH, bootProject: 'boot-id' }),
+    })
+    expect(result.current).toBe('boot-id')
+  })
+
+  it('answers undefined until health says which project that is', () => {
+    // Better a neutral chip for a moment than an entry written under a name nothing else uses.
+    const { result } = renderHook(() => useReferenceProjectId(), { wrapper: mounted(null) })
+    expect(result.current).toBeUndefined()
+  })
+})
+
+describe('refStatusRecheckAfter', () => {
+  const answered = (recheckAfterMs: number | null): GithubRefStatusData =>
+    ({ available: true, prs: {}, issues: {}, recheckAfterMs }) as GithubRefStatusData
+
+  it('takes the cadence from the answer, whatever it says', () => {
+    expect(refStatusRecheckAfter(answered(60_000))).toBe(60_000)
+    expect(refStatusRecheckAfter(answered(24 * 60 * 60_000))).toBe(24 * 60 * 60_000)
+  })
+
+  it('passes null through — nothing here can change, so nothing is scheduled', () => {
+    // Becomes `refetchInterval: false` and an infinite staleTime, so a table of merged pull
+    // requests costs nothing on a loop and ignores window focus too.
+    expect(refStatusRecheckAfter(answered(null))).toBeNull()
+  })
+
+  it('obeys an unavailable answer as readily as a successful one', () => {
+    expect(
+      refStatusRecheckAfter({ available: false, reason: 'gh CLI not found', recheckAfterMs: 300_000 } as GithubRefStatusData),
+    ).toBe(300_000)
+  })
+
+  it('falls back only where there is no answer to obey', () => {
+    // Still loading, or errored out — `retry` owns the immediate attempt; this is the backstop
+    // that keeps the query from going silent forever.
+    expect(refStatusRecheckAfter(undefined)).toBeGreaterThan(0)
   })
 })

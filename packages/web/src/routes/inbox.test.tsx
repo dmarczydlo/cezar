@@ -88,7 +88,7 @@ const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
 const connectedProviders = (backends: readonly string[]): ProviderStatusResponse => ({
-  providers: (['claude', 'codex', 'opencode'] as const).map((provider) => ({
+  providers: (['claude', 'codex', 'opencode', 'cursor'] as const).map((provider) => ({
     provider,
     status: backends.includes(provider) ? 'connected' as const : 'not-installed' as const,
     enabled: true,
@@ -100,7 +100,8 @@ const PROVIDERS_NONE: ProviderStatusResponse = {
     { provider: 'claude', status: 'disconnected', enabled: true },
     { provider: 'codex', status: 'unknown', enabled: true },
     { provider: 'opencode', status: 'not-installed', enabled: true },
-  ],
+    { provider: 'cursor', status: 'disconnected', enabled: true },
+        ],
 }
 
 /** Fetch stub in the house style (github.test.tsx): records requests, serves the fixtures,
@@ -132,7 +133,10 @@ function stubFetch(
       // The runner/model pills (#401) read the host's backends and the per-runner defaults.
       if (method === 'GET' && path === '/api/v1/health') return jsonResponse(health(backends))
       if (method === 'GET' && path === '/api/v1/providers/status') return jsonResponse(providers)
-      if (method === 'GET' && path === '/api/v1/models?runner=codex') return jsonResponse({ runner: 'codex', models: [{ id: 'gpt-future', label: 'gpt-future', description: 'Newest' }], source: 'live', stale: false })
+      if (method === 'GET' && path.startsWith('/api/v1/models?runner=')) {
+        const runner = path.includes('cursor') ? 'cursor' : 'codex'
+        return jsonResponse({ runner, models: runner === 'codex' ? [{ id: 'gpt-future', label: 'gpt-future', description: 'Newest' }] : [{ id: 'composer-2.5', label: 'Composer 2.5', description: '' }], source: 'live', stale: false })
+      }
       if (method === 'GET' && path === '/api/v1/config') {
         return jsonResponse({ defaultRunner: backends[0] ?? 'claude', defaultModels })
       }
@@ -359,6 +363,54 @@ describe('Run — backend selection (#401)', () => {
     expect(card.querySelector('[data-slot="runner-pill"]')).toBeNull()
   })
 
+  /**
+   * The Inbox mounts `EnginePills` WITHOUT `accounts` on purpose: `POST /todos/:id/start` has no
+   * `agentProfile` field, so offering a login picker here would render a choice the server drops
+   * on the floor. That opt-in is the whole safety argument for putting accounts in the shared
+   * component, and it needs a host that actually HAS a second login to mean anything — with an
+   * empty profiles payload this passes no matter which way the flag is set.
+   */
+  it('never offers agent accounts, even on a host with two logins for one runner', async () => {
+    const twoLogins = (provider: string, id: string, label: string) => ({
+      id,
+      provider,
+      label,
+      configDir: `~/.${provider}-${id}`,
+      path: `/home/u/.${provider}-${id}`,
+      exists: true,
+      looksValid: true,
+      isDefault: id === 'default',
+    })
+    const sent = stubFetch({
+      'GET /api/v1/workspace/agent-profiles': () =>
+        jsonResponse({
+          editable: true,
+          profiles: [
+            twoLogins('claude', 'default', 'Default'),
+            twoLogins('claude', 'klaudiusz', 'Klaudiusz'),
+          ],
+          profileCapableProviders: ['claude'],
+          selections: {},
+          defaults: {},
+        }),
+    })
+    renderInbox()
+
+    await waitFor(() => expect(cards()).toHaveLength(2))
+    const card = cards()[0]!
+    await waitFor(() => expect(card.querySelector('[data-slot="model-pill"]')).not.toBeNull())
+    // A second login would raise the pill on an accounts-enabled surface; here it must not.
+    expect(card.querySelector('[data-slot="runner-pill"]')).toBeNull()
+
+    fireEvent.click(card.querySelector('[data-action="todo-run"]')!)
+    // No body at all — stronger than an empty one, and the same bar the untouched-pick test above
+    // holds the card to. An `agentProfile` the endpoint ignores could not survive this.
+    await waitFor(() =>
+      expect(sent.some((r) => r.method === 'POST' && r.path === '/api/v1/todos/t1/start')).toBe(true),
+    )
+    expect(startBody(sent, 't1')).toBeUndefined()
+  })
+
   it('a multi-backend host offers the runner pill, and the pick reaches the POST', async () => {
     const sent = stubFetch({
       // Reproduce a non-boot project whose default is Claude while boot health says Codex.
@@ -474,6 +526,7 @@ describe('Run — backend selection (#401)', () => {
           { provider: 'claude', status: 'disconnected', enabled: true },
           { provider: 'codex', status: 'connected', enabled: true },
           { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     )
@@ -503,6 +556,7 @@ describe('Run — backend selection (#401)', () => {
           { provider: 'claude', status: 'connected', enabled: false },
           { provider: 'codex', status: 'connected', enabled: true },
           { provider: 'opencode', status: 'not-installed', enabled: true },
+          { provider: 'cursor', status: 'not-installed', enabled: true },
         ],
       },
     )

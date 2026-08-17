@@ -169,22 +169,47 @@ CLIs you are already logged into, `claude` by default.
 > instead of the real CLI — the whole cockpit works with no `claude` login, so
 > you can explore runs, diffs, variants and the review gate offline.
 
+### Nightly builds — help us shape cezar 🌙
+
+Every night we publish the trunk to npm, so the features landing in the next
+release are one command away:
+
+```bash
+npx cezar-cli@nightly      # everything merged as of last night
+```
+
+**Come build this with us.** cezar is shaped by the people who run it on real
+repos: if you try a nightly and something feels wrong — a workflow that stalls, a
+diff that reads badly, a runner that should exist — [open an
+issue](https://github.com/open-mercato/cezar/issues) and tell us. That feedback,
+early, is worth more than a bug report six weeks after a release, and it is how
+most of the features here got their final shape.
+
+**Know what you're installing.** A nightly is verified (typecheck, unit suites,
+packaged-CLI e2e — the same gate a release runs) but it is *not* a release: it
+can be rough, a flag or a screen may change under you, and something occasionally
+breaks in a way no test caught. Nothing is at risk beyond your patience — every
+task runs in its own git worktree and cezar never auto-merges — but if you need a
+boring day, stay on the stable release. Pin a nightly you liked with its exact
+version (`npx cezar-cli@0.9.2-nightly.20260813.126` — the cockpit prints the
+version it booted, and the date in it tells you how old the build is), and drop
+back to stable any time with a plain `npx cezar-cli`.
+
 ### Preview builds
 
-Every green CI run publishes an installable npm snapshot
-([how it works](docs/publishing.md)), so you can try unreleased code without
-cloning anything:
+Every green CI run also publishes an installable npm snapshot
+([how it works](docs/publishing.md)), so you can try code that has not even
+merged yet:
 
 ```bash
 npx cezar-cli@develop      # current develop head
-npx cezar-cli@main         # current main head (ahead of the latest stable release)
 ```
 
 Every pull request gets its own preview too — the CI bot posts a sticky comment
 on the PR with the exact pinned version to copy-paste
-(`npx cezar-cli@<version>-pr<N>.<run>`). Previews are prerelease versions under
-their own dist-tags; a plain `npx cezar-cli` always resolves to the latest
-stable release.
+(`npx cezar-cli@<version>-pr<N>.<run>`). Nightlies and previews are all
+prerelease versions under their own dist-tags; a plain `npx cezar-cli` always
+resolves to the latest stable release.
 
 ---
 
@@ -496,6 +521,7 @@ Useful environment variables:
 | `CEZ_CLAUDE_BIN=/path/to/claude` | Override which `claude` binary is used. |
 | `CEZ_CODEX_BIN=/path/to/codex` | Override which `codex` binary is used. |
 | `CEZ_OPENCODE_BIN=/path/to/opencode` | Override which `opencode` binary is used. |
+| `CEZ_CURSOR_AGENT_BIN=/path/to/agent` | Override which Cursor Agent CLI (`agent`) binary is used. |
 | `CEZ_PI_BIN=/path/to/pi` | Override which `pi` binary is used. |
 | `CLAUDE_CONFIG_DIR`, `CODEX_HOME` | The agents' **own** variables, honoured where the vendor documents one. Setting one moves that agent's **default account** — the config folder cezar discovers. A *second* login of the same CLI is deliberately not an environment setting, since one process-wide value cannot differ per project: add it under **Settings → Agent accounts** and pick it per project. |
 | `CEZ_BROWSE_ROOT=~/` | Default root for **Add project → Open local folder…**. The picker cannot navigate above it; a saved workspace value overrides the environment default and must name an existing folder. |
@@ -553,13 +579,14 @@ platform.
 ## Coding agent backends
 
 cezar is not married to one vendor. Every agent step runs through a single
-`AgentRunner` seam with four built-in backends:
+`AgentRunner` seam with five built-in backends:
 
 | Backend | CLI | How cezar drives it | Tool access |
 |---|---|---|---|
 | **Claude Code** (default) | [`claude`](https://github.com/anthropics/claude-code) | Headless `stream-json` mode. | Per-tool `--allowedTools` (`bashAllowlist` scopes `Bash`); `dontAsk` denies unapproved tools without prompting (`CEZ_APPROVAL_GATE=1` → `acceptEdits` + approval UI). |
 | **Codex** | [`codex`](https://github.com/openai/codex) | `codex app-server` — JSON-RPC over stdio, the same transport the Codex IDE extensions use. | Ignores `allowedTools`; the default auto mode uses `danger-full-access` with `approvalPolicy: never` (`CEZ_CODEX_NETWORK=0` opts into the network-blocked `workspace-write` sandbox). |
 | **OpenCode** _(experimental)_ | [`opencode`](https://opencode.ai) | `opencode serve` — a local HTTP server with an SSE event stream. | Ignores `allowedTools` entirely; every permission is auto-approved. |
+| **Cursor** | [`agent`](https://cursor.com/docs/cli/overview) (Cursor Agent CLI) | Headless print mode: `agent -p --force --trust --output-format stream-json`. Continue is fresh-session in v1 (print mode exits per turn). Its documented output carries no token/cost figures, so a Cursor run's header always reads zero tokens and no cost — that is the backend not reporting usage, not the run using nothing. | Ignores `allowedTools`; `--force` / `--trust` auto-approves tool use for unattended runs. |
 | **pi** _(experimental)_ | [`pi`](https://github.com/badlogic/pi-mono) | Persistent `--mode rpc` over JSONL; models are picked with the `provider/model` convention. | Maps `allowedTools` onto pi's `--tools` allowlist; a configured `bashAllowlist` disables Bash because pi cannot express command-prefix rules. |
 
 > ⚠️ **OpenCode and pi support are experimental.** Both runners work but are less
@@ -568,7 +595,7 @@ cezar is not married to one vendor. Every agent step runs through a single
 > rough edges.
 
 On startup cezar probes which CLIs are installed and the cockpit only offers
-the backends it found — install any one of the four and you're operational.
+the backends it found — install any one of the five and you're operational.
 
 **Pick a backend at three levels** (most specific wins):
 
@@ -803,17 +830,6 @@ the server, **Zod** at every boundary, **YAML** for workflows, and a **React 19 
 Vite + Tailwind v4 + shadcn/ui** cockpit shipped pre-built in `packages/cezar/web/dist/` — the
 published package carries the built app, so `npx` users never run a bundler.
 Every module is meant to be read in one sitting.
-
----
-
-## Relationship to cezar (the SaaS)
-
-cez is the radically-simple, single-user sibling of
-[**cezar**](https://github.com/comerito/cezar) — the team SaaS cockpit for
-running agents across the whole GitHub issue lifecycle (auto-triage, webhooks,
-Supabase, multi-repo). Same core ideas — agent runner, skills, declarative
-workflows, a live run cockpit — with none of the accounts, database or cloud.
-Start here; graduate to cezar when a team needs shared visibility.
 
 ---
 
