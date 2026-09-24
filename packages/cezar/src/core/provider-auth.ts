@@ -2,9 +2,10 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { AGENT_MODELS_LOCKED_ENV } from './agent-model-policy.ts';
 import { profileEnv } from './agent-profiles.ts';
-import { withEnvPrefix } from './shell-env.ts';
+import { resolveClaudeBin } from './claude-bin.ts';
+import { quoteExecutable, withEnvPrefix } from './shell-env.ts';
 
-export const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'pi'] as const;
+export const PROVIDER_IDS = ['claude', 'codex', 'opencode', 'cursor', 'pi'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 export type ProviderConnectionState =
   | 'connected'
@@ -67,6 +68,18 @@ interface ProviderDescriptor {
   loginArgs: readonly string[];
   installHint: string;
   parse: (result: ProviderCommandResult) => ProviderConnectionState | null;
+  /**
+   * An answer available WITHOUT spawning the CLI at all, checked before `runCommand` — `undefined`
+   * defers to the normal probe. Every other backend's own CLI self-reports API-key vs. subscription
+   * auth in its status command (codex literally prints "logged in using an API key"), so nothing
+   * needs this. Cursor's `agent status` does not, which used to mean `CURSOR_API_KEY` support lived
+   * ONLY inside `parseCursorStatus` — reachable when the command's own answer was inconclusive, but
+   * never when the command hung: `probe()`'s `timedOut` branch returns before `parse()` runs, so a
+   * status call that blocks on a network check (plausible with a key but no cached browser session)
+   * silently ate the fallback and reported 'unknown' no matter how valid the key was. Skipping the
+   * spawn entirely removes that race instead of racing to out-guess it.
+   */
+  precheck?: () => ProviderConnectionState | undefined;
 }
 
 const COMMAND_TIMEOUT_MS = 10_000;
@@ -101,6 +114,19 @@ const COMMAND_TIMEOUT_MS = 10_000;
  */
 const CONNECTED_TTL_MS = 10 * 60_000;
 const UNSETTLED_TTL_MS = 60_000;
+
+/**
+ * How long before the same provider may be self-checked again after a runtime rejection
+ * (`verifyRuntimeAuthFailure`).
+ *
+ * A latch is raised from a PATTERN MATCH on a runner's error text, and a single failing run can emit
+ * several auth-shaped lines in a row. Without a floor, each line that re-latches after a successful
+ * self-check would buy its own CLI spawn. One self-check a minute is plenty for the case this exists
+ * for — a rejection that was transient against credentials that are still valid — and it bounds the
+ * pathological case (a CLI that reports logged in while the vendor keeps rejecting the token) to one
+ * probe per minute instead of one per error line.
+ */
+const RUNTIME_AUTH_VERIFY_COOLDOWN_MS = 60_000;
 
 /** The lifetime for a set of rows: minutes only when EVERY row is connected. A mixed answer takes
  *  the short window, because the not-connected row in it is the one that might self-heal.
@@ -230,7 +256,7 @@ function parsePiStatus(result: ProviderCommandResult): ProviderConnectionState |
 const DESCRIPTORS: readonly ProviderDescriptor[] = [
   {
     id: 'claude',
-    executable: () => process.env.CEZ_CLAUDE_BIN ?? 'claude',
+    executable: () => resolveClaudeBin(),
     statusArgs: ['auth', 'status', '--json'],
     loginArgs: ['auth', 'login'],
     installHint: 'Install Claude Code, then run `claude auth login`.',
@@ -253,6 +279,17 @@ const DESCRIPTORS: readonly ProviderDescriptor[] = [
     parse: parseOpenCodeStatus,
   },
   {
+    id: 'cursor',
+    executable: () => process.env.CEZ_CURSOR_AGENT_BIN ?? 'agent',
+    statusArgs: ['status', '--format', 'json'],
+    loginArgs: ['login'],
+    installHint:
+      'Install the Cursor CLI (`curl https://cursor.com/install -fsS | bash`), then run `agent login` (or set CURSOR_API_KEY).',
+    parse: parseCursorStatus,
+    // `agent status` doesn't itself know about CURSOR_API_KEY — see the `precheck` field's doc.
+    precheck: () => (process.env.CURSOR_API_KEY?.trim() ? 'connected' : undefined),
+  },
+  {
     id: 'pi',
     executable: () => process.env.CEZ_PI_BIN ?? 'pi',
     statusArgs: ['--list-models'],
@@ -261,6 +298,27 @@ const DESCRIPTORS: readonly ProviderDescriptor[] = [
     parse: parsePiStatus,
   },
 ];
+
+function parseCursorStatus(result: ProviderCommandResult): ProviderConnectionState | null {
+  // probe() already handles ENOENT / any other errorCode before calling parse() — result here
+  // always ran successfully at the process level. It also never reaches this function at all when
+  // CURSOR_API_KEY is set (the cursor descriptor's `precheck` answers first), so this is purely
+  // the `agent login` (browser OAuth) read.
+  try {
+    const parsed: unknown = JSON.parse(result.stdout);
+    if (parsed && typeof parsed === 'object') {
+      const row = parsed as Record<string, unknown>;
+      if (row.isAuthenticated === true || row.status === 'authenticated') return 'connected';
+      if (row.isAuthenticated === false || row.status === 'unauthenticated') return 'disconnected';
+    }
+  } catch {
+    /* fall through */
+  }
+  // Malformed or unrecognized JSON is inconclusive, not a confirmed unauthenticated state —
+  // return null so probe() reports 'unknown' instead of telling the user to reconnect an
+  // account that was never actually checked.
+  return null;
+}
 
 function defaultRunProviderCommand(
   executable: string,
@@ -300,13 +358,6 @@ function defaultRunProviderCommand(
   });
 }
 
-function quoteExecutable(executable: string, platform: NodeJS.Platform): string {
-  if (platform === 'win32') {
-    return `"${executable.replace(/[%&!"]/g, '^$&')}"`;
-  }
-  return `'${executable.replaceAll("'", "'\\''")}'`;
-}
-
 /** The per-account cache key. ONE definition: a probe that wrote under a different spelling than
  *  a peek reads would silently make every peek a miss, and every page load pay for a CLI spawn. */
 function profileCacheKey(provider: ProviderId, profileId: string): string {
@@ -342,6 +393,11 @@ export class ProviderAuthService {
   private readonly platform: NodeJS.Platform;
   private readonly createAuthFailureId: () => string;
   private readonly runtimeFailures = new Map<ProviderId, RuntimeAuthFailure>();
+  /** One self-check at a time per provider, and not more often than the cooldown. Both guard the
+   *  same thing — a CLI spawn per auth-shaped error line — from the two directions it can arrive
+   *  from: concurrently, and in quick succession. */
+  private readonly verifyingRuntimeFailures = new Set<ProviderId>();
+  private readonly lastRuntimeVerification = new Map<ProviderId, number>();
   private nextRuntimeFailureGeneration = 0;
   private nextProbeGeneration = 0;
   private completed?: {
@@ -435,6 +491,77 @@ export class ProviderAuthService {
     if (!current || current.authFailureId !== authFailureId) return false;
     this.runtimeFailures.delete(provider);
     return true;
+  }
+
+  /**
+   * Ask the provider's OWN CLI whether a runtime rejection was real, and drop the incident when it
+   * was not. Resolves to the recovered row when it cleared one, `null` otherwise.
+   *
+   * A latch is raised by matching a runner's error text against
+   * {@link isRuntimeProviderAuthFailure} — a heuristic over vendor prose — and it then outranks every
+   * probe (`withRuntimeFailures`). Before this existed, `clearRuntimeAuthFailure` had exactly one
+   * caller, `POST /providers/:provider/retry`, so the only way out of a latch was a human opening
+   * Settings and pressing "Try again". That button clears the incident and re-probes, and it works,
+   * which is the whole diagnosis: the credentials were still there. A transient 401 and a false
+   * positive of the text match were both indistinguishable from a real logout, and both parked the
+   * cockpit until someone clicked.
+   *
+   * So the latch stays authoritative — it is raised instantly, and `provider-action-gate` keeps
+   * refusing to start runs against it — but it no longer stands unexamined. This is deliberately the
+   * same two steps the retry route performs, minus the human: probe, then clear.
+   *
+   * What it will NOT do:
+   * - clear an incident it did not observe. The id is captured before the probe and handed to
+   *   `clearRuntimeAuthFailure`, so a rejection that arrives mid-probe survives the answer to an
+   *   older question.
+   * - clear on anything but `connected`. `disconnected`, `not-installed` and `unknown` all leave the
+   *   latch alone; an inconclusive probe is not evidence of health.
+   * - spawn more than one probe per provider per {@link RUNTIME_AUTH_VERIFY_COOLDOWN_MS}.
+   */
+  async verifyRuntimeAuthFailure(provider: ProviderId): Promise<ProviderStatus | null> {
+    if (process.env.CEZ_DRY_RUN === '1' || providerAuthChecksDisabled()) return null;
+    const failure = this.runtimeFailures.get(provider);
+    if (!failure) return null;
+    if (this.verifyingRuntimeFailures.has(provider)) return null;
+    const lastVerifiedAt = this.lastRuntimeVerification.get(provider);
+    if (lastVerifiedAt !== undefined && this.now() - lastVerifiedAt < RUNTIME_AUTH_VERIFY_COOLDOWN_MS) {
+      return null;
+    }
+
+    this.verifyingRuntimeFailures.add(provider);
+    let probed: ProviderStatus;
+    try {
+      this.lastRuntimeVerification.set(provider, this.now());
+      probed = await this.probe(descriptorFor(provider));
+    } finally {
+      this.verifyingRuntimeFailures.delete(provider);
+    }
+
+    if (probed.status !== 'connected') return null;
+    if (!this.clearRuntimeAuthFailure(provider, failure.authFailureId)) return null;
+    this.rememberProbedRow(probed);
+    return probed;
+  }
+
+  /**
+   * Fold ONE freshly probed row into the cached response.
+   *
+   * Without this, dropping a latch would uncover whatever the last full probe happened to say about
+   * that provider — which can be older than the answer we just got, and on a cold-ish cache can be
+   * `unknown`. Clearing an incident only to reveal a stale contradiction would trade a red banner for
+   * a grey one. The cache TIMESTAMP is deliberately untouched: this corrects one row, it is not a
+   * full probe, and it must not extend the whole response's lifetime.
+   */
+  private rememberProbedRow(status: ProviderStatus): void {
+    if (!this.completed) return;
+    this.completed = {
+      ...this.completed,
+      response: {
+        providers: this.completed.response.providers.map((row) => (
+          row.provider === status.provider ? status : row
+        )),
+      },
+    };
   }
 
   /**
@@ -590,6 +717,8 @@ export class ProviderAuthService {
   }
 
   private async probe(descriptor: ProviderDescriptor, configDir?: string | null): Promise<ProviderStatus> {
+    const precheck = descriptor.precheck?.();
+    if (precheck !== undefined) return { provider: descriptor.id, status: precheck };
     let result: ProviderCommandResult;
     // The default profile is probed with the SAME three-argument call it always was — no
     // trailing `undefined`. `runCommand` is an injected seam, and handing every existing
